@@ -1,5 +1,7 @@
 package com.serverbench.backend.controller;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,10 +12,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.serverbench.backend.dto.request.ExperimentRequest;
+import com.serverbench.backend.dto.response.ComparisonResponse;
+import com.serverbench.backend.dto.response.ExperimentHistoryResponse;
 import com.serverbench.backend.dto.response.ExperimentResponse;
+import com.serverbench.backend.dto.response.ExperimentResultResponse;
 import com.serverbench.backend.dto.response.ExperimentStartResponse;
 import com.serverbench.backend.dto.response.ExperimentStatusResponse;
 import com.serverbench.backend.service.ExperimentService;
+import com.serverbench.engine.benchmark.ComparisonSummary;
 import com.serverbench.engine.benchmark.Experiment;
 import com.serverbench.engine.benchmark.ExperimentResult;
 
@@ -60,6 +66,46 @@ public class ExperimentController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    // ================================================================
+    // GET EXPERIMENT HISTORY
+    // ================================================================
+
+    @GetMapping
+    public ResponseEntity<ExperimentHistoryResponse>
+    getExperimentHistory() {
+
+        List<Experiment> experiments =
+                experimentService.getAllExperiments();
+
+        List<ExperimentResponse> responses =
+                experiments.stream()
+                        .map(
+                                experiment ->
+                                        new ExperimentResponse(
+                                                experiment,
+                                                experimentService
+                                                        .getThreadPoolSize(
+                                                                experiment.getId()
+                                                        ),
+                                                experimentService
+                                                        .getStatus(
+                                                                experiment.getId()
+                                                        )
+                                                        .name()
+                                        )
+                        )
+                        .toList();
+
+        ExperimentHistoryResponse response =
+                new ExperimentHistoryResponse(
+                        responses
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
     }
 
     // ================================================================
@@ -130,6 +176,65 @@ public class ExperimentController {
                         status,
                         result,
                         errorMessage
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+    // ================================================================
+    // GET EXPERIMENT RESULTS
+    // ================================================================
+
+    @GetMapping("/{experimentId}/results")
+    public ResponseEntity<ExperimentResultResponse>
+    getExperimentResults(
+            @PathVariable("experimentId")
+            String experimentId
+    ) {
+
+        ExperimentResult result =
+                experimentService.getResult(
+                        experimentId
+                );
+
+        if (result == null) {
+
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .build();
+        }
+
+        ExperimentResultResponse response =
+                new ExperimentResultResponse(
+                        result
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+    // ================================================================
+    // GET EXPERIMENT COMPARISON
+    // ================================================================
+
+    @GetMapping("/{experimentId}/comparison")
+    public ResponseEntity<ComparisonResponse>
+    getExperimentComparison(
+            @PathVariable("experimentId")
+            String experimentId
+    ) {
+
+        ComparisonSummary summary =
+                experimentService.getComparisonSummary(
+                        experimentId
+                );
+
+        ComparisonResponse response =
+                new ComparisonResponse(
+                        summary
                 );
 
         return ResponseEntity.ok(

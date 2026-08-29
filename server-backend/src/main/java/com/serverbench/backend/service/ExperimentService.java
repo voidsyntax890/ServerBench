@@ -1,5 +1,7 @@
 package com.serverbench.backend.service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -10,7 +12,9 @@ import org.springframework.stereotype.Service;
 
 import com.serverbench.backend.dto.request.ExperimentRequest;
 import com.serverbench.engine.benchmark.BenchmarkConfig;
+import com.serverbench.engine.benchmark.ComparisonSummary;
 import com.serverbench.engine.benchmark.Experiment;
+import com.serverbench.engine.benchmark.ExperimentAnalyzer;
 import com.serverbench.engine.benchmark.ExperimentResult;
 import com.serverbench.engine.benchmark.ExperimentRunner;
 import com.serverbench.engine.benchmark.ServerArchitecture;
@@ -32,8 +36,8 @@ public class ExperimentService {
             = new ConcurrentHashMap<>();
 
     /**
-     * Creates and stores a ServerBench experiment from
-     * the validated API request.
+     * Creates and stores a ServerBench experiment from the validated API
+     * request.
      *
      * Creation does not start benchmark execution.
      */
@@ -48,24 +52,24 @@ public class ExperimentService {
             );
         }
 
-        BenchmarkConfig benchmarkConfig =
-                new BenchmarkConfig(
+        BenchmarkConfig benchmarkConfig
+                = new BenchmarkConfig(
                         request.getHost(),
                         request.getPort(),
                         request.getTotalRequests() == null
-                                ? 0
-                                : request.getTotalRequests(),
+                        ? 0
+                        : request.getTotalRequests(),
                         request.getConcurrency(),
                         request.getWarmupDurationMs(),
                         request.getMeasurementDurationMs() == null
-                                ? 0
-                                : request.getMeasurementDurationMs(),
+                        ? 0
+                        : request.getMeasurementDurationMs(),
                         request.getRequestTimeoutMs(),
                         request.getExecutionMode()
                 );
 
-        Experiment experiment =
-                new Experiment(
+        Experiment experiment
+                = new Experiment(
                         request.getName(),
                         request.getDescription(),
                         benchmarkConfig,
@@ -74,15 +78,14 @@ public class ExperimentService {
                 );
 
         /*
-         * IMPORTANT:
          * Store both the Experiment and the original request.
          *
-         * The request is needed later when the experiment starts
-         * so that architecture-specific settings such as the
-         * Thread Pool size can be reconstructed.
+         * The original request is needed later for
+         * architecture-specific configuration such as
+         * Thread Pool size.
          */
-        ExperimentRecord record =
-                new ExperimentRecord(
+        ExperimentRecord record
+                = new ExperimentRecord(
                         experiment,
                         request
                 );
@@ -97,9 +100,6 @@ public class ExperimentService {
 
     /**
      * Starts an existing experiment asynchronously.
-     *
-     * The HTTP request does not remain blocked for the
-     * entire duration of the benchmark.
      */
     public void startExperiment(
             String experimentId
@@ -113,8 +113,8 @@ public class ExperimentService {
             );
         }
 
-        ExperimentRecord record =
-                experiments.get(
+        ExperimentRecord record
+                = experiments.get(
                         experimentId
                 );
 
@@ -122,7 +122,7 @@ public class ExperimentService {
 
             throw new IllegalArgumentException(
                     "Experiment not found: "
-                            + experimentId
+                    + experimentId
             );
         }
 
@@ -160,11 +160,11 @@ public class ExperimentService {
                 );
             }
 
-            record.status =
-                    ExperimentStatus.RUNNING;
+            record.status
+                    = ExperimentStatus.RUNNING;
 
-            record.executionFuture =
-                    CompletableFuture.runAsync(
+            record.executionFuture
+                    = CompletableFuture.runAsync(
                             () -> executeExperiment(
                                     record
                             )
@@ -199,8 +199,8 @@ public class ExperimentService {
     /**
      * Returns the completed experiment result.
      *
-     * Returns null while execution is still running or
-     * before execution has started.
+     * Returns null while execution is still running or before execution has
+     * started.
      */
     public ExperimentResult getResult(
             String experimentId
@@ -224,6 +224,75 @@ public class ExperimentService {
     }
 
     /**
+     * Returns all stored experiments in creation order, newest first.
+     */
+    public List<Experiment> getAllExperiments() {
+
+        List<Experiment> allExperiments
+                = new ArrayList<>();
+
+        for (ExperimentRecord record
+                : experiments.values()) {
+
+            allExperiments.add(
+                    record.experiment
+            );
+        }
+
+        allExperiments.sort(
+                Comparator.comparing(
+                        Experiment::getCreatedAt
+                ).reversed()
+        );
+
+        return List.copyOf(
+                allExperiments
+        );
+    }
+
+    /**
+     * Returns the Thread Pool size configured for an experiment.
+     *
+     * The value is only meaningful when THREAD_POOL was selected.
+     */
+    public Integer getThreadPoolSize(
+            String experimentId
+    ) {
+
+        return getRecord(
+                experimentId
+        ).request.getThreadPoolSize();
+    }
+
+    /**
+     * Creates a comparison summary from the completed experiment result using
+     * the existing engine analyzer.
+     */
+    public ComparisonSummary getComparisonSummary(
+            String experimentId
+    ) {
+
+        ExperimentResult result
+                = getRecord(
+                        experimentId
+                ).result;
+
+        if (result == null) {
+
+            throw new IllegalStateException(
+                    "Experiment results are not available yet."
+            );
+        }
+
+        ExperimentAnalyzer analyzer
+                = new ExperimentAnalyzer();
+
+        return analyzer.analyze(
+                result
+        );
+    }
+
+    /**
      * Executes the experiment in the background.
      */
     private void executeExperiment(
@@ -232,16 +301,12 @@ public class ExperimentService {
 
         try {
 
-            Experiment experiment =
-                    record.experiment;
+            Experiment experiment
+                    = record.experiment;
 
-            ExperimentRequest request =
-                    record.request;
+            ExperimentRequest request
+                    = record.request;
 
-            /*
-             * This should never be null because createExperiment()
-             * stores the original request together with the experiment.
-             */
             if (request == null) {
 
                 throw new IllegalStateException(
@@ -249,13 +314,13 @@ public class ExperimentService {
                 );
             }
 
-            int threadPoolSize =
-                    determineThreadPoolSize(
+            int threadPoolSize
+                    = determineThreadPoolSize(
                             request
                     );
 
-            ServerConfig serverConfig =
-                    new ServerConfig(
+            ServerConfig serverConfig
+                    = new ServerConfig(
                             experiment
                                     .getBenchmarkConfig()
                                     .getPort(),
@@ -264,42 +329,40 @@ public class ExperimentService {
                     );
 
             Map<
-                    ServerArchitecture,
-                    Supplier<ServerEngine>
-                    > serverFactories =
-                    ServerFactory.createFactories(
+                    ServerArchitecture, Supplier<ServerEngine>> serverFactories
+                    = ServerFactory.createFactories(
                             serverConfig
                     );
 
-            ExperimentRunner experimentRunner =
-                    new ExperimentRunner(
+            ExperimentRunner experimentRunner
+                    = new ExperimentRunner(
                             experiment,
                             serverFactories
                     );
 
-            ExperimentResult result =
-                    experimentRunner.run();
+            ExperimentResult result
+                    = experimentRunner.run();
 
             synchronized (record) {
 
-                record.result =
-                        result;
+                record.result
+                        = result;
 
-                record.status =
-                        ExperimentStatus.COMPLETED;
+                record.status
+                        = ExperimentStatus.COMPLETED;
             }
 
         } catch (Exception exception) {
 
             synchronized (record) {
 
-                record.errorMessage =
-                        buildErrorMessage(
+                record.errorMessage
+                        = buildErrorMessage(
                                 exception
                         );
 
-                record.status =
-                        ExperimentStatus.FAILED;
+                record.status
+                        = ExperimentStatus.FAILED;
             }
         }
     }
@@ -307,33 +370,29 @@ public class ExperimentService {
     /**
      * Determines the Thread Pool size.
      *
-     * Thread Pool configuration is meaningful only when
-     * THREAD_POOL is selected.
+     * Thread Pool configuration is meaningful only when THREAD_POOL is
+     * selected.
      */
     private int determineThreadPoolSize(
             ExperimentRequest request
     ) {
 
-        List<ServerArchitecture> architectures =
-                request.getArchitectures();
+        List<ServerArchitecture> architectures
+                = request.getArchitectures();
 
         if (architectures.contains(
                 ServerArchitecture.THREAD_POOL
         )) {
 
-            Integer threadPoolSize =
-                    request.getThreadPoolSize();
+            Integer threadPoolSize
+                    = request.getThreadPoolSize();
 
-            /*
-             * Validation should already have guaranteed this,
-             * but keep a defensive check at the engine boundary.
-             */
             if (threadPoolSize == null
                     || threadPoolSize <= 0) {
 
                 throw new IllegalArgumentException(
                         "Thread pool size must be greater than 0 "
-                                + "when THREAD_POOL is selected."
+                        + "when THREAD_POOL is selected."
                 );
             }
 
@@ -341,10 +400,8 @@ public class ExperimentService {
         }
 
         /*
-         * ServerConfig requires a positive pool size even when
-         * ThreadPoolServer is not part of the experiment.
-         *
-         * This value has no effect on the other architectures.
+         * ServerConfig requires a positive pool size even
+         * when ThreadPoolServer is not being tested.
          */
         return DEFAULT_THREAD_POOL_SIZE;
     }
@@ -364,8 +421,8 @@ public class ExperimentService {
             );
         }
 
-        ExperimentRecord record =
-                experiments.get(
+        ExperimentRecord record
+                = experiments.get(
                         experimentId
                 );
 
@@ -373,7 +430,7 @@ public class ExperimentService {
 
             throw new IllegalArgumentException(
                     "Experiment not found: "
-                            + experimentId
+                    + experimentId
             );
         }
 
@@ -384,8 +441,8 @@ public class ExperimentService {
             Exception exception
     ) {
 
-        String message =
-                exception.getMessage();
+        String message
+                = exception.getMessage();
 
         if (message == null
                 || message.isBlank()) {
@@ -402,10 +459,20 @@ public class ExperimentService {
                 + message;
     }
 
-    // ================================================================
-    // EXPERIMENT STATUS
-    // ================================================================
+    /**
+     * Returns all server architectures supported by ServerBench.
+     */
+    public List<ServerArchitecture> getAvailableArchitectures() {
 
+        return List.of(
+                ServerArchitecture.SINGLE_THREADED,
+                ServerArchitecture.MULTI_THREADED,
+                ServerArchitecture.THREAD_POOL,
+                ServerArchitecture.VIRTUAL_THREAD
+        );
+    }
+
+    //experiment status section
     public enum ExperimentStatus {
 
         CREATED,
@@ -414,10 +481,6 @@ public class ExperimentService {
         FAILED,
         CANCELLED
     }
-
-    // ================================================================
-    // INTERNAL EXPERIMENT RECORD
-    // ================================================================
 
     private static final class ExperimentRecord {
 
@@ -428,25 +491,24 @@ public class ExperimentService {
         private volatile ExperimentResult result;
         private volatile String errorMessage;
 
-        private volatile CompletableFuture<Void>
-                executionFuture;
+        private volatile CompletableFuture<Void> executionFuture;
 
         private ExperimentRecord(
                 Experiment experiment,
                 ExperimentRequest request
         ) {
 
-            this.experiment =
-                    experiment;
+            this.experiment
+                    = experiment;
 
-            this.request =
-                    request;
+            this.request
+                    = request;
 
-            this.status =
-                    ExperimentStatus.CREATED;
+            this.status
+                    = ExperimentStatus.CREATED;
 
-            this.errorMessage =
-                    "";
+            this.errorMessage
+                    = "";
         }
     }
 }
