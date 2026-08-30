@@ -1,5 +1,6 @@
 package com.serverbench.backend.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -9,14 +10,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.serverbench.backend.dto.request.ExperimentRequest;
+import com.serverbench.backend.entity.BenchmarkMetricsEntity;
+import com.serverbench.backend.entity.BenchmarkRunEntity;
+import com.serverbench.backend.entity.ExperimentArchitectureEntity;
+import com.serverbench.backend.entity.ExperimentEntity;
+import com.serverbench.backend.repository.BenchmarkMetricsRepository;
+import com.serverbench.backend.repository.BenchmarkRunRepository;
+import com.serverbench.backend.repository.ExperimentArchitectureRepository;
+import com.serverbench.backend.repository.ExperimentRepository;
 import com.serverbench.engine.benchmark.BenchmarkConfig;
+import com.serverbench.engine.benchmark.BenchmarkResult;
 import com.serverbench.engine.benchmark.ComparisonSummary;
+import com.serverbench.engine.benchmark.EnvironmentMetadata;
 import com.serverbench.engine.benchmark.Experiment;
 import com.serverbench.engine.benchmark.ExperimentAnalyzer;
 import com.serverbench.engine.benchmark.ExperimentResult;
+import com.serverbench.engine.benchmark.ExperimentRunResult;
+import com.serverbench.engine.benchmark.ExperimentRunResult.Status;
 import com.serverbench.engine.benchmark.ExperimentRunner;
+import com.serverbench.engine.benchmark.ExecutionMode;
 import com.serverbench.engine.benchmark.ServerArchitecture;
 import com.serverbench.engine.benchmark.ServerFactory;
 import com.serverbench.engine.core.ServerConfig;
@@ -27,20 +42,49 @@ public class ExperimentService {
 
     private static final int DEFAULT_THREAD_POOL_SIZE = 1;
 
+    private final ExperimentRepository experimentRepository;
+    private final ExperimentArchitectureRepository
+            experimentArchitectureRepository;
+    private final BenchmarkRunRepository benchmarkRunRepository;
+    private final BenchmarkMetricsRepository
+            benchmarkMetricsRepository;
+
     /*
-     * Temporary M4 storage.
+     * Runtime-only state.
      *
-     * PostgreSQL will replace this storage layer in M5.
+     * PostgreSQL is now the source for persisted experiments,
+     * runs and metrics.
      */
     private final Map<String, ExperimentRecord> experiments
             = new ConcurrentHashMap<>();
 
-    /**
-     * Creates and stores a ServerBench experiment from the validated API
-     * request.
-     *
-     * Creation does not start benchmark execution.
-     */
+    public ExperimentService(
+            ExperimentRepository experimentRepository,
+            ExperimentArchitectureRepository
+                    experimentArchitectureRepository,
+            BenchmarkRunRepository benchmarkRunRepository,
+            BenchmarkMetricsRepository
+                    benchmarkMetricsRepository
+    ) {
+
+        this.experimentRepository =
+                experimentRepository;
+
+        this.experimentArchitectureRepository =
+                experimentArchitectureRepository;
+
+        this.benchmarkRunRepository =
+                benchmarkRunRepository;
+
+        this.benchmarkMetricsRepository =
+                benchmarkMetricsRepository;
+    }
+
+    // ================================================================
+    // CREATE EXPERIMENT
+    // ================================================================
+
+    @Transactional
     public Experiment createExperiment(
             ExperimentRequest request
     ) {
@@ -52,24 +96,24 @@ public class ExperimentService {
             );
         }
 
-        BenchmarkConfig benchmarkConfig
-                = new BenchmarkConfig(
+        BenchmarkConfig benchmarkConfig =
+                new BenchmarkConfig(
                         request.getHost(),
                         request.getPort(),
                         request.getTotalRequests() == null
-                        ? 0
-                        : request.getTotalRequests(),
+                                ? 0
+                                : request.getTotalRequests(),
                         request.getConcurrency(),
                         request.getWarmupDurationMs(),
                         request.getMeasurementDurationMs() == null
-                        ? 0
-                        : request.getMeasurementDurationMs(),
+                                ? 0
+                                : request.getMeasurementDurationMs(),
                         request.getRequestTimeoutMs(),
                         request.getExecutionMode()
                 );
 
-        Experiment experiment
-                = new Experiment(
+        Experiment experiment =
+                new Experiment(
                         request.getName(),
                         request.getDescription(),
                         benchmarkConfig,
@@ -77,17 +121,26 @@ public class ExperimentService {
                         request.getRepetitions()
                 );
 
-        /*
-         * Store both the Experiment and the original request.
-         *
-         * The original request is needed later for
-         * architecture-specific configuration such as
-         * Thread Pool size.
-         */
-        ExperimentRecord record
-                = new ExperimentRecord(
+        ExperimentEntity experimentEntity =
+                toExperimentEntity(
                         experiment,
                         request
+                );
+
+        experimentRepository.save(
+                experimentEntity
+        );
+
+        persistArchitectures(
+                experiment.getId(),
+                experiment.getArchitectures()
+        );
+
+        ExperimentRecord record =
+                new ExperimentRecord(
+                        experiment,
+                        request,
+                        experimentEntity
                 );
 
         experiments.put(
@@ -98,33 +151,18 @@ public class ExperimentService {
         return experiment;
     }
 
-    /**
-     * Starts an existing experiment asynchronously.
-     */
+    // ================================================================
+    // START EXPERIMENT
+    // ================================================================
+
     public void startExperiment(
             String experimentId
     ) {
 
-        if (experimentId == null
-                || experimentId.isBlank()) {
-
-            throw new IllegalArgumentException(
-                    "Experiment ID cannot be empty."
-            );
-        }
-
-        ExperimentRecord record
-                = experiments.get(
+        ExperimentRecord record =
+                getRuntimeRecord(
                         experimentId
                 );
-
-        if (record == null) {
-
-            throw new IllegalArgumentException(
-                    "Experiment not found: "
-                    + experimentId
-            );
-        }
 
         synchronized (record) {
 
@@ -160,11 +198,19 @@ public class ExperimentService {
                 );
             }
 
-            record.status
-                    = ExperimentStatus.RUNNING;
+            record.status =
+                    ExperimentStatus.RUNNING;
 
-            record.executionFuture
-                    = CompletableFuture.runAsync(
+            record.experimentEntity.setStatus(
+                    ExperimentStatus.RUNNING.name()
+            );
+
+            experimentRepository.save(
+                    record.experimentEntity
+            );
+
+            record.executionFuture =
+                    CompletableFuture.runAsync(
                             () -> executeExperiment(
                                     record
                             )
@@ -172,110 +218,139 @@ public class ExperimentService {
         }
     }
 
-    /**
-     * Returns the stored experiment.
-     */
+    // ================================================================
+    // GET EXPERIMENT
+    // ================================================================
+
     public Experiment getExperiment(
             String experimentId
     ) {
 
-        return getRecord(
-                experimentId
-        ).experiment;
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord != null) {
+
+            return runtimeRecord.experiment;
+        }
+
+        ExperimentEntity entity =
+                getExperimentEntity(
+                        experimentId
+                );
+
+        return restoreExperiment(
+                entity
+        );
     }
 
-    /**
-     * Returns the current execution status.
-     */
+    // ================================================================
+    // GET STATUS
+    // ================================================================
+
     public ExperimentStatus getStatus(
             String experimentId
     ) {
 
-        return getRecord(
-                experimentId
-        ).status;
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord != null) {
+
+            return runtimeRecord.status;
+        }
+
+        ExperimentEntity entity =
+                getExperimentEntity(
+                        experimentId
+                );
+
+        return ExperimentStatus.valueOf(
+                entity.getStatus()
+        );
     }
 
-    /**
-     * Returns the completed experiment result.
-     *
-     * Returns null while execution is still running or before execution has
-     * started.
-     */
+    // ================================================================
+    // GET RESULT
+    // ================================================================
+
     public ExperimentResult getResult(
             String experimentId
     ) {
 
-        return getRecord(
-                experimentId
-        ).result;
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord != null
+                && runtimeRecord.result != null) {
+
+            return runtimeRecord.result;
+        }
+
+        ExperimentEntity entity =
+                getExperimentEntity(
+                        experimentId
+                );
+
+        if (!ExperimentStatus.COMPLETED.name()
+                .equals(entity.getStatus())) {
+
+            return null;
+        }
+
+        return restoreExperimentResult(
+                entity
+        );
     }
 
-    /**
-     * Returns the execution error, if the experiment failed.
-     */
+    // ================================================================
+    // GET ERROR
+    // ================================================================
+
     public String getErrorMessage(
             String experimentId
     ) {
 
-        return getRecord(
-                experimentId
-        ).errorMessage;
-    }
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
 
-    /**
-     * Returns all stored experiments in creation order, newest first.
-     */
-    public List<Experiment> getAllExperiments() {
+        if (runtimeRecord != null) {
 
-        List<Experiment> allExperiments
-                = new ArrayList<>();
-
-        for (ExperimentRecord record
-                : experiments.values()) {
-
-            allExperiments.add(
-                    record.experiment
-            );
+            return runtimeRecord.errorMessage;
         }
 
-        allExperiments.sort(
-                Comparator.comparing(
-                        Experiment::getCreatedAt
-                ).reversed()
-        );
+        ExperimentEntity entity =
+                getExperimentEntity(
+                        experimentId
+                );
 
-        return List.copyOf(
-                allExperiments
-        );
+        return entity.getStatus().equals(
+                ExperimentStatus.FAILED.name()
+        )
+                ? "Persisted experiment failed."
+                : "";
     }
 
-    /**
-     * Returns the Thread Pool size configured for an experiment.
-     *
-     * The value is only meaningful when THREAD_POOL was selected.
-     */
-    public Integer getThreadPoolSize(
-            String experimentId
-    ) {
+    // ================================================================
+    // GET COMPARISON
+    // ================================================================
 
-        return getRecord(
-                experimentId
-        ).request.getThreadPoolSize();
-    }
-
-    /**
-     * Creates a comparison summary from the completed experiment result using
-     * the existing engine analyzer.
-     */
     public ComparisonSummary getComparisonSummary(
             String experimentId
     ) {
 
-        ExperimentResult result
-                = getRecord(
+        ExperimentResult result =
+                getResult(
                         experimentId
-                ).result;
+                );
 
         if (result == null) {
 
@@ -284,43 +359,112 @@ public class ExperimentService {
             );
         }
 
-        ExperimentAnalyzer analyzer
-                = new ExperimentAnalyzer();
+        ExperimentAnalyzer analyzer =
+                new ExperimentAnalyzer();
 
         return analyzer.analyze(
                 result
         );
     }
 
-    /**
-     * Executes the experiment in the background.
-     */
+    // ================================================================
+    // GET EXPERIMENT HISTORY
+    // ================================================================
+
+    public List<Experiment> getAllExperiments() {
+
+        List<ExperimentEntity> entities =
+                experimentRepository.findAll();
+
+        entities.sort(
+                Comparator.comparing(
+                        ExperimentEntity::getCreatedAt
+                ).reversed()
+        );
+
+        List<Experiment> experiments =
+                new ArrayList<>();
+
+        for (ExperimentEntity entity :
+                entities) {
+
+            experiments.add(
+                    restoreExperiment(
+                            entity
+                    )
+            );
+        }
+
+        return List.copyOf(
+                experiments
+        );
+    }
+
+    // ================================================================
+    // GET THREAD POOL SIZE
+    // ================================================================
+
+    public Integer getThreadPoolSize(
+            String experimentId
+    ) {
+
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord != null) {
+
+            return runtimeRecord.request
+                    .getThreadPoolSize();
+        }
+
+        ExperimentEntity entity =
+                getExperimentEntity(
+                        experimentId
+                );
+
+        return entity.getThreadPoolSize();
+    }
+
+    // ================================================================
+    // GET AVAILABLE ARCHITECTURES
+    // ================================================================
+
+    public List<ServerArchitecture>
+    getAvailableArchitectures() {
+
+        return List.of(
+                ServerArchitecture.SINGLE_THREADED,
+                ServerArchitecture.MULTI_THREADED,
+                ServerArchitecture.THREAD_POOL,
+                ServerArchitecture.VIRTUAL_THREAD
+        );
+    }
+
+    // ================================================================
+    // EXECUTION
+    // ================================================================
+
     private void executeExperiment(
             ExperimentRecord record
     ) {
 
         try {
 
-            Experiment experiment
-                    = record.experiment;
+            Experiment experiment =
+                    record.experiment;
 
-            ExperimentRequest request
-                    = record.request;
+            ExperimentRequest request =
+                    record.request;
 
-            if (request == null) {
-
-                throw new IllegalStateException(
-                        "Stored experiment request is missing."
-                );
-            }
-
-            int threadPoolSize
-                    = determineThreadPoolSize(
+            int threadPoolSize =
+                    determineThreadPoolSize(
                             request
                     );
 
-            ServerConfig serverConfig
-                    = new ServerConfig(
+            ServerConfig serverConfig =
+                    new ServerConfig(
                             experiment
                                     .getBenchmarkConfig()
                                     .getPort(),
@@ -329,87 +473,407 @@ public class ExperimentService {
                     );
 
             Map<
-                    ServerArchitecture, Supplier<ServerEngine>> serverFactories
-                    = ServerFactory.createFactories(
+                    ServerArchitecture,
+                    Supplier<ServerEngine>
+                    > serverFactories =
+                    ServerFactory.createFactories(
                             serverConfig
                     );
 
-            ExperimentRunner experimentRunner
-                    = new ExperimentRunner(
+            ExperimentRunner runner =
+                    new ExperimentRunner(
                             experiment,
                             serverFactories
                     );
 
-            ExperimentResult result
-                    = experimentRunner.run();
+            ExperimentResult result =
+                    runner.run();
+
+            persistBenchmarkResults(
+                    record.experimentEntity,
+                    result
+            );
 
             synchronized (record) {
 
-                record.result
-                        = result;
+                record.result =
+                        result;
 
-                record.status
-                        = ExperimentStatus.COMPLETED;
+                record.status =
+                        ExperimentStatus.COMPLETED;
+
+                record.experimentEntity.setStatus(
+                        ExperimentStatus.COMPLETED.name()
+                );
+
+                experimentRepository.save(
+                        record.experimentEntity
+                );
             }
 
         } catch (Exception exception) {
 
             synchronized (record) {
 
-                record.errorMessage
-                        = buildErrorMessage(
+                record.errorMessage =
+                        buildErrorMessage(
                                 exception
                         );
 
-                record.status
-                        = ExperimentStatus.FAILED;
+                record.status =
+                        ExperimentStatus.FAILED;
+
+                record.experimentEntity.setStatus(
+                        ExperimentStatus.FAILED.name()
+                );
+
+                experimentRepository.save(
+                        record.experimentEntity
+                );
             }
         }
     }
 
-    /**
-     * Determines the Thread Pool size.
-     *
-     * Thread Pool configuration is meaningful only when THREAD_POOL is
-     * selected.
-     */
+    // ================================================================
+    // PERSIST RUNS + METRICS
+    // ================================================================
+
+    private void persistBenchmarkResults(
+            ExperimentEntity experimentEntity,
+            ExperimentResult experimentResult
+    ) {
+
+        for (ExperimentRunResult runResult :
+                experimentResult.getRunResults()) {
+
+            BenchmarkRunEntity runEntity =
+                    new BenchmarkRunEntity(
+                            experimentEntity,
+                            runResult.getArchitecture(),
+                            runResult.getRepetitionNumber(),
+                            runResult.getStatus(),
+                            runResult.getErrorMessage(),
+                            runResult.getStartedAt(),
+                            runResult.getFinishedAt()
+                    );
+
+            BenchmarkRunEntity savedRun =
+                    benchmarkRunRepository.save(
+                            runEntity
+                    );
+
+            BenchmarkResult benchmarkResult =
+                    runResult.getBenchmarkResult();
+
+            if (benchmarkResult != null) {
+
+                BenchmarkMetricsEntity metricsEntity =
+                        toBenchmarkMetricsEntity(
+                                savedRun,
+                                benchmarkResult
+                        );
+
+                benchmarkMetricsRepository.save(
+                        metricsEntity
+                );
+            }
+        }
+    }
+
+    private BenchmarkMetricsEntity
+    toBenchmarkMetricsEntity(
+            BenchmarkRunEntity runEntity,
+            BenchmarkResult result
+    ) {
+
+        return new BenchmarkMetricsEntity(
+                runEntity,
+                result.getTotalRequests(),
+                result.getSuccessfulRequests(),
+                result.getFailedRequests(),
+                result.getTotalDurationMs(),
+                result.getThroughputRequestsPerSecond(),
+                result.getAverageLatencyMs(),
+                result.getMinimumLatencyMs(),
+                result.getMaximumLatencyMs(),
+                result.getP50LatencyMs(),
+                result.getP95LatencyMs(),
+                result.getP99LatencyMs(),
+                result.getSuccessRate(),
+                result.getErrorRate(),
+                result.getConnectTimeouts(),
+                result.getConnectionRefused(),
+                result.getConnectionResets(),
+                result.getReadTimeouts(),
+                result.getNoResponseFailures(),
+                result.getOtherIoFailures()
+        );
+    }
+
+    // ================================================================
+    // RESTORE EXPERIMENT
+    // ================================================================
+
+    private Experiment restoreExperiment(
+            ExperimentEntity entity
+    ) {
+
+        List<
+                ExperimentArchitectureEntity
+                > architectureEntities =
+                experimentArchitectureRepository
+                        .findByExperimentId(
+                                entity.getId()
+                        );
+
+        List<ServerArchitecture> architectures =
+                architectureEntities
+                        .stream()
+                        .map(
+                                ExperimentArchitectureEntity
+                                        ::getArchitecture
+                        )
+                        .toList();
+
+        BenchmarkConfig benchmarkConfig =
+                new BenchmarkConfig(
+                        entity.getHost(),
+                        entity.getPort(),
+                        entity.getTotalRequests() == null
+                                ? 0
+                                : entity.getTotalRequests(),
+                        entity.getConcurrency(),
+                        entity.getWarmupDurationMs(),
+                        entity.getMeasurementDurationMs() == null
+                                ? 0
+                                : entity.getMeasurementDurationMs(),
+                        entity.getRequestTimeoutMs(),
+                        entity.getExecutionMode()
+                );
+
+        EnvironmentMetadata environmentMetadata =
+                new EnvironmentMetadata(
+                        entity.getOperatingSystem(),
+                        entity.getJavaVersion(),
+                        entity.getJavaRuntime(),
+                        entity.getProcessor(),
+                        entity.getAvailableProcessors(),
+                        entity.getMaxMemoryMb()
+                );
+
+        return Experiment.restore(
+                entity.getId(),
+                entity.getName(),
+                entity.getDescription(),
+                benchmarkConfig,
+                architectures,
+                entity.getRepetitions(),
+                environmentMetadata,
+                entity.getCreatedAt()
+        );
+    }
+
+    // ================================================================
+    // RESTORE RESULT
+    // ================================================================
+
+    private ExperimentResult restoreExperimentResult(
+            ExperimentEntity experimentEntity
+    ) {
+
+        List<BenchmarkRunEntity> runEntities =
+                benchmarkRunRepository
+                        .findByExperiment_Id(
+                                experimentEntity.getId()
+                        );
+
+        runEntities.sort(
+                Comparator.comparing(
+                        BenchmarkRunEntity::getStartedAt
+                )
+        );
+
+        ExperimentResult result =
+                new ExperimentResult(
+                        experimentEntity.getId(),
+                        experimentEntity.getName()
+                );
+
+        for (BenchmarkRunEntity runEntity :
+                runEntities) {
+
+            BenchmarkMetricsEntity metrics =
+                    benchmarkMetricsRepository
+                            .findByRun_Id(
+                                    runEntity.getId()
+                            )
+                            .orElse(null);
+
+            BenchmarkResult benchmarkResult =
+                    metrics == null
+                            ? null
+                            : restoreBenchmarkResult(
+                                    runEntity,
+                                    metrics
+                            );
+
+            ExperimentRunResult runResult =
+                    new ExperimentRunResult(
+                            runEntity.getArchitecture(),
+                            runEntity.getRepetitionNumber(),
+                            benchmarkResult,
+                            runEntity.getStatus(),
+                            runEntity.getErrorMessage(),
+                            runEntity.getStartedAt(),
+                            runEntity.getFinishedAt()
+                    );
+
+            result.addRunResult(
+                    runResult
+            );
+        }
+
+        return result;
+    }
+
+    // ================================================================
+    // RESTORE BENCHMARK RESULT
+    // ================================================================
+
+    private BenchmarkResult restoreBenchmarkResult(
+            BenchmarkRunEntity runEntity,
+            BenchmarkMetricsEntity metrics
+    ) {
+
+        return new BenchmarkResult(
+                runEntity
+                        .getArchitecture()
+                        .name(),
+
+                metrics.getTotalRequests(),
+                metrics.getSuccessfulRequests(),
+                metrics.getFailedRequests(),
+                metrics.getTotalDurationMs(),
+                metrics.getAverageLatencyMs(),
+                metrics.getThroughputRequestsPerSecond(),
+                metrics.getSuccessRate(),
+                metrics.getErrorRate(),
+                metrics.getMinimumLatencyMs(),
+                metrics.getMaximumLatencyMs(),
+                metrics.getP50LatencyMs(),
+                metrics.getP95LatencyMs(),
+                metrics.getP99LatencyMs(),
+                metrics.getConnectTimeouts(),
+                metrics.getConnectionRefused(),
+                metrics.getConnectionResets(),
+                metrics.getReadTimeouts(),
+                metrics.getNoResponseFailures(),
+                metrics.getOtherIoFailures()
+        );
+    }
+
+    // ================================================================
+    // THREAD POOL CONFIGURATION
+    // ================================================================
+
     private int determineThreadPoolSize(
             ExperimentRequest request
     ) {
 
-        List<ServerArchitecture> architectures
-                = request.getArchitectures();
-
-        if (architectures.contains(
+        if (request.getArchitectures().contains(
                 ServerArchitecture.THREAD_POOL
         )) {
 
-            Integer threadPoolSize
-                    = request.getThreadPoolSize();
+            Integer size =
+                    request.getThreadPoolSize();
 
-            if (threadPoolSize == null
-                    || threadPoolSize <= 0) {
+            if (size == null || size <= 0) {
 
                 throw new IllegalArgumentException(
                         "Thread pool size must be greater than 0 "
-                        + "when THREAD_POOL is selected."
+                                + "when THREAD_POOL is selected."
                 );
             }
 
-            return threadPoolSize;
+            return size;
         }
 
-        /*
-         * ServerConfig requires a positive pool size even
-         * when ThreadPoolServer is not being tested.
-         */
         return DEFAULT_THREAD_POOL_SIZE;
     }
 
-    /**
-     * Finds an experiment in the temporary M4 store.
-     */
-    private ExperimentRecord getRecord(
+    // ================================================================
+    // ENTITY CONVERSION
+    // ================================================================
+
+    private ExperimentEntity toExperimentEntity(
+            Experiment experiment,
+            ExperimentRequest request
+    ) {
+
+        BenchmarkConfig config =
+                experiment.getBenchmarkConfig();
+
+        EnvironmentMetadata metadata =
+                experiment.getEnvironmentMetadata();
+
+        return new ExperimentEntity(
+                experiment.getId(),
+                experiment.getName(),
+                experiment.getDescription(),
+                config.getHost(),
+                config.getPort(),
+                config.getExecutionMode(),
+                request.getTotalRequests(),
+                request.getMeasurementDurationMs(),
+                config.getConcurrency(),
+                config.getWarmupDurationMs(),
+                config.getRequestTimeoutMs(),
+                experiment.getRepetitions(),
+                request.getThreadPoolSize(),
+                ExperimentStatus.CREATED.name(),
+                metadata.getOperatingSystem(),
+                metadata.getJavaVersion(),
+                metadata.getJavaRuntime(),
+                metadata.getProcessor(),
+                metadata.getAvailableProcessors(),
+                metadata.getMaxMemoryMb(),
+                experiment.getCreatedAt()
+        );
+    }
+
+    // ================================================================
+    // ARCHITECTURE PERSISTENCE
+    // ================================================================
+
+    private void persistArchitectures(
+            String experimentId,
+            List<ServerArchitecture> architectures
+    ) {
+
+        List<ExperimentArchitectureEntity> entities =
+                new ArrayList<>();
+
+        for (ServerArchitecture architecture :
+                architectures) {
+
+            entities.add(
+                    new ExperimentArchitectureEntity(
+                            experimentId,
+                            architecture
+                    )
+            );
+        }
+
+        experimentArchitectureRepository.saveAll(
+                entities
+        );
+    }
+
+    // ================================================================
+    // DATABASE LOOKUP
+    // ================================================================
+
+    private ExperimentEntity getExperimentEntity(
             String experimentId
     ) {
 
@@ -421,8 +885,25 @@ public class ExperimentService {
             );
         }
 
-        ExperimentRecord record
-                = experiments.get(
+        return experimentRepository
+                .findById(
+                        experimentId
+                )
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "Experiment not found: "
+                                                + experimentId
+                                )
+                );
+    }
+
+    private ExperimentRecord getRuntimeRecord(
+            String experimentId
+    ) {
+
+        ExperimentRecord record =
+                experiments.get(
                         experimentId
                 );
 
@@ -430,19 +911,23 @@ public class ExperimentService {
 
             throw new IllegalArgumentException(
                     "Experiment not found: "
-                    + experimentId
+                            + experimentId
             );
         }
 
         return record;
     }
 
+    // ================================================================
+    // ERROR MESSAGE
+    // ================================================================
+
     private String buildErrorMessage(
             Exception exception
     ) {
 
-        String message
-                = exception.getMessage();
+        String message =
+                exception.getMessage();
 
         if (message == null
                 || message.isBlank()) {
@@ -459,20 +944,10 @@ public class ExperimentService {
                 + message;
     }
 
-    /**
-     * Returns all server architectures supported by ServerBench.
-     */
-    public List<ServerArchitecture> getAvailableArchitectures() {
+    // ================================================================
+    // STATUS
+    // ================================================================
 
-        return List.of(
-                ServerArchitecture.SINGLE_THREADED,
-                ServerArchitecture.MULTI_THREADED,
-                ServerArchitecture.THREAD_POOL,
-                ServerArchitecture.VIRTUAL_THREAD
-        );
-    }
-
-    //experiment status section
     public enum ExperimentStatus {
 
         CREATED,
@@ -482,33 +957,43 @@ public class ExperimentService {
         CANCELLED
     }
 
+    // ================================================================
+    // RUNTIME RECORD
+    // ================================================================
+
     private static final class ExperimentRecord {
 
         private final Experiment experiment;
         private final ExperimentRequest request;
+        private final ExperimentEntity experimentEntity;
 
         private volatile ExperimentStatus status;
         private volatile ExperimentResult result;
         private volatile String errorMessage;
 
-        private volatile CompletableFuture<Void> executionFuture;
+        private volatile CompletableFuture<Void>
+                executionFuture;
 
         private ExperimentRecord(
                 Experiment experiment,
-                ExperimentRequest request
+                ExperimentRequest request,
+                ExperimentEntity experimentEntity
         ) {
 
-            this.experiment
-                    = experiment;
+            this.experiment =
+                    experiment;
 
-            this.request
-                    = request;
+            this.request =
+                    request;
 
-            this.status
-                    = ExperimentStatus.CREATED;
+            this.experimentEntity =
+                    experimentEntity;
 
-            this.errorMessage
-                    = "";
+            this.status =
+                    ExperimentStatus.CREATED;
+
+            this.errorMessage =
+                    "";
         }
     }
 }

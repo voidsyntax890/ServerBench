@@ -114,6 +114,7 @@ public class GlobalExceptionHandler {
             Exception exception
     ) {
 
+
         String requestId =
                 UUID.randomUUID().toString();
 

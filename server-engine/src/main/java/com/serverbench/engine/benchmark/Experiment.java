@@ -22,6 +22,60 @@ public class Experiment {
 
     private final LocalDateTime createdAt;
 
+    private Experiment(
+            String id,
+            String name,
+            String description,
+            BenchmarkConfig benchmarkConfig,
+            List<ServerArchitecture> architectures,
+            int repetitions,
+            EnvironmentMetadata environmentMetadata,
+            LocalDateTime createdAt
+    ) {
+
+        validate(
+                name,
+                benchmarkConfig,
+                architectures,
+                repetitions
+        );
+
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Experiment ID cannot be empty."
+            );
+        }
+
+        if (environmentMetadata == null) {
+            throw new IllegalArgumentException(
+                    "Environment metadata cannot be null."
+            );
+        }
+
+        if (createdAt == null) {
+            throw new IllegalArgumentException(
+                    "Creation time cannot be null."
+            );
+        }
+
+        this.id = id;
+        this.name = name.trim();
+        this.description =
+                description == null
+                        ? ""
+                        : description.trim();
+        this.benchmarkConfig =
+                benchmarkConfig;
+        this.architectures =
+                new ArrayList<>(architectures);
+        this.repetitions =
+                repetitions;
+        this.environmentMetadata =
+                environmentMetadata;
+        this.createdAt =
+                createdAt;
+    }
+
     public Experiment(
             String name,
             String description,
@@ -105,6 +159,29 @@ public class Experiment {
                     "Repetitions must be greater than 0."
             );
         }
+    }
+
+    public static Experiment restore(
+            String id,
+            String name,
+            String description,
+            BenchmarkConfig benchmarkConfig,
+            List<ServerArchitecture> architectures,
+            int repetitions,
+            EnvironmentMetadata environmentMetadata,
+            LocalDateTime createdAt
+    ) {
+
+        return new Experiment(
+                id,
+                name,
+                description,
+                benchmarkConfig,
+                architectures,
+                repetitions,
+                environmentMetadata,
+                createdAt
+        );
     }
 
     public String getId() {
