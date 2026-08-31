@@ -1,0 +1,469 @@
+/* ================================================================
+   SERVERBENCH - EXPERIMENTS PAGE
+================================================================ */
+
+.experiments-page {
+    width: 100%;
+    max-width: 1280px;
+
+    margin: 0 auto;
+
+    padding: 34px 38px 60px;
+}
+
+/* ================================================================
+   BACK BUTTON
+================================================================ */
+
+.experiments-back {
+    display: inline-flex;
+    align-items: center;
+
+    gap: 7px;
+
+    margin-bottom: 20px;
+
+    padding: 0;
+
+    border: 0;
+    background: transparent;
+
+    color: #64748b;
+
+    font-size: 11px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        color 0.15s ease;
+}
+
+.experiments-back:hover {
+    color: #2563eb;
+}
+
+/* ================================================================
+   HEADER
+================================================================ */
+
+.experiments-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+
+    gap: 24px;
+
+    margin-bottom: 24px;
+}
+
+.experiments-breadcrumb {
+    margin-bottom: 8px;
+
+    color: #94a3b8;
+
+    font-size: 10px;
+}
+
+.experiments-header h1 {
+    margin: 0;
+
+    color: #172033;
+
+    font-size: 29px;
+    line-height: 1.15;
+
+    letter-spacing: -0.04em;
+}
+
+.experiments-header p {
+    margin: 8px 0 0;
+
+    color: #64748b;
+
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* ================================================================
+   CREATE BUTTON
+================================================================ */
+
+.experiments-create-button {
+    min-height: 42px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    padding: 0 17px;
+
+    border: 1px solid #1d4ed8;
+    border-radius: 8px;
+
+    background: #2563eb;
+    color: #ffffff;
+
+    font-size: 11px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.08);
+
+    transition:
+        background 0.15s ease,
+        transform 0.15s ease;
+}
+
+.experiments-create-button:hover {
+    background: #1d4ed8;
+}
+
+.experiments-create-button:active {
+    transform: translateY(1px);
+}
+
+/* ================================================================
+   MAIN CARD
+================================================================ */
+
+.experiments-card {
+    width: 100%;
+
+    padding: 24px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.025);
+}
+
+/* ================================================================
+   CARD HEADER
+================================================================ */
+
+.experiments-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    gap: 20px;
+
+    margin-bottom: 22px;
+}
+
+.experiments-card-header h2 {
+    margin: 0;
+
+    color: #172033;
+
+    font-size: 16px;
+    font-weight: 700;
+
+    letter-spacing: -0.02em;
+}
+
+.experiments-card-header p {
+    margin: 5px 0 0;
+
+    color: #94a3b8;
+
+    font-size: 11px;
+}
+
+.experiments-count {
+    padding: 6px 9px;
+
+    border-radius: 999px;
+
+    background: #f8fafc;
+
+    border: 1px solid #e2e8f0;
+
+    color: #64748b;
+
+    font-size: 9px;
+    font-weight: 600;
+
+    white-space: nowrap;
+}
+
+/* ================================================================
+   TABLE
+================================================================ */
+
+.experiments-table-wrapper {
+    width: 100%;
+
+    overflow-x: auto;
+}
+
+.experiments-list-table {
+    width: 100%;
+    min-width: 930px;
+
+    border-collapse: collapse;
+}
+
+.experiments-list-table th {
+    padding:
+        0
+        13px
+        13px;
+
+    border-bottom: 1px solid #e5e7eb;
+
+    color: #94a3b8;
+
+    text-align: left;
+
+    font-size: 9px;
+    font-weight: 600;
+
+    white-space: nowrap;
+}
+
+.experiments-list-table td {
+    padding:
+        16px
+        13px;
+
+    border-bottom: 1px solid #eef2f7;
+
+    color: #64748b;
+
+    font-size: 10px;
+
+    white-space: nowrap;
+}
+
+.experiments-list-table tbody tr {
+    transition:
+        background 0.15s ease;
+}
+
+.experiments-list-table tbody tr:hover {
+    background: #fbfdff;
+}
+
+.experiments-list-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+/* ================================================================
+   EXPERIMENT NAME
+================================================================ */
+
+.experiment-name-cell {
+    display: flex;
+    flex-direction: column;
+
+    gap: 5px;
+}
+
+.experiment-name-cell strong {
+    color: #172033;
+
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.experiment-name-cell span {
+    max-width: 280px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    color: #cbd5e1;
+
+    font-family:
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace;
+
+    font-size: 8px;
+}
+
+/* ================================================================
+   STATUS
+================================================================ */
+
+.experiment-status {
+    display: inline-flex;
+    align-items: center;
+
+    gap: 6px;
+
+    padding: 5px 9px;
+
+    border-radius: 999px;
+
+    font-size: 8px;
+    font-weight: 700;
+
+    letter-spacing: 0.03em;
+}
+
+.experiment-status-dot {
+    width: 5px;
+    height: 5px;
+
+    border-radius: 50%;
+}
+
+.status-completed {
+    background: #f0fdf4;
+    color: #15803d;
+}
+
+.status-completed .experiment-status-dot {
+    background: #16a34a;
+}
+
+.status-running {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.status-running .experiment-status-dot {
+    background: #f59e0b;
+}
+
+.status-failed {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.status-failed .experiment-status-dot {
+    background: #dc2626;
+}
+
+.status-created {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.status-created .experiment-status-dot {
+    background: #2563eb;
+}
+
+/* ================================================================
+   TABLE NUMBERS
+================================================================ */
+
+.table-number {
+    color: #334155;
+
+    font-weight: 600;
+}
+
+.table-muted {
+    color: #94a3b8;
+}
+
+/* ================================================================
+   ACTIONS
+================================================================ */
+
+.experiment-actions {
+    display: flex;
+    align-items: center;
+
+    gap: 7px;
+}
+
+.experiment-actions button {
+    min-height: 30px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding:
+        0
+        10px;
+
+    border: 1px solid #dbe2ea;
+    border-radius: 7px;
+
+    background: #ffffff;
+    color: #475569;
+
+    font-size: 9px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.experiment-actions button:hover:not(:disabled) {
+    background: #eff6ff;
+
+    border-color: #bfdbfe;
+
+    color: #2563eb;
+}
+
+.experiment-actions button:disabled {
+    opacity: 0.45;
+
+    cursor: not-allowed;
+}
+
+/* ================================================================
+   RESPONSIVE
+================================================================ */
+
+@media (max-width: 800px) {
+
+    .experiments-page {
+        padding:
+            24px
+            18px
+            44px;
+    }
+
+    .experiments-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .experiments-create-button {
+        align-self: flex-start;
+    }
+
+    .experiments-card {
+        padding: 18px;
+    }
+
+}
+
+@media (max-width: 520px) {
+
+    .experiments-header h1 {
+        font-size: 25px;
+    }
+
+    .experiments-card-header {
+        flex-direction: column;
+    }
+
+    .experiments-count {
+        align-self: flex-start;
+    }
+
+}

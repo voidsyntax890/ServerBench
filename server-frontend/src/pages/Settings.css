@@ -1,0 +1,231 @@
+/* ================================================================
+   SERVERBENCH - SETTINGS PAGE
+================================================================ */
+
+.settings-page {
+    width: 100%;
+    max-width: 1050px;
+
+    margin: 0 auto;
+
+    padding: 34px 38px 60px;
+}
+
+/* ================================================================
+   BACK
+================================================================ */
+
+.settings-back {
+    display: inline-flex;
+    align-items: center;
+
+    gap: 7px;
+
+    margin-bottom: 20px;
+
+    padding: 0;
+
+    border: 0;
+    background: transparent;
+
+    color: #64748b;
+
+    font-size: 11px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        color 0.15s ease;
+}
+
+.settings-back:hover {
+    color: #2563eb;
+}
+
+/* ================================================================
+   HEADER
+================================================================ */
+
+.settings-breadcrumb {
+    margin-bottom: 8px;
+
+    color: #94a3b8;
+
+    font-size: 10px;
+}
+
+.settings-header h1 {
+    margin: 0;
+
+    color: #172033;
+
+    font-size: 29px;
+    line-height: 1.15;
+
+    letter-spacing: -0.04em;
+}
+
+.settings-header p {
+    margin: 8px 0 24px;
+
+    color: #64748b;
+
+    font-size: 13px;
+}
+
+/* ================================================================
+   CARD
+================================================================ */
+
+.settings-card {
+    margin-bottom: 20px;
+
+    padding: 24px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.025);
+}
+
+.settings-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    gap: 20px;
+
+    margin-bottom: 20px;
+}
+
+.settings-card-header h2 {
+    margin: 0;
+
+    color: #172033;
+
+    font-size: 16px;
+    font-weight: 700;
+
+    letter-spacing: -0.02em;
+}
+
+.settings-card-header p {
+    margin: 5px 0 0;
+
+    color: #94a3b8;
+
+    font-size: 11px;
+}
+
+.settings-status {
+    padding: 5px 9px;
+
+    border-radius: 999px;
+
+    background: #f0fdf4;
+
+    color: #15803d;
+
+    font-size: 8px;
+    font-weight: 700;
+}
+
+/* ================================================================
+   LIST
+================================================================ */
+
+.settings-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-row {
+    min-height: 68px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 30px;
+
+    border-bottom: 1px solid #eef2f7;
+}
+
+.settings-row:last-child {
+    border-bottom: 0;
+}
+
+.settings-row > div {
+    display: flex;
+    flex-direction: column;
+
+    gap: 4px;
+}
+
+.settings-label {
+    color: #334155;
+
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.settings-row small {
+    color: #94a3b8;
+
+    font-size: 9px;
+}
+
+.settings-row strong {
+    color: #172033;
+
+    font-size: 10px;
+    font-weight: 600;
+
+    text-align: right;
+}
+
+/* ================================================================
+   NOTE
+================================================================ */
+
+.settings-note {
+    color: #94a3b8;
+
+    font-size: 9px;
+}
+
+/* ================================================================
+   RESPONSIVE
+================================================================ */
+
+@media (max-width: 650px) {
+
+    .settings-page {
+        padding:
+            24px
+            18px
+            44px;
+    }
+
+    .settings-card {
+        padding: 18px;
+    }
+
+    .settings-row {
+        align-items: flex-start;
+        flex-direction: column;
+
+        gap: 7px;
+
+        padding: 15px 0;
+    }
+
+    .settings-row strong {
+        text-align: left;
+    }
+
+}
