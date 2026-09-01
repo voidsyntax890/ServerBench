@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.serverbench.engine.core.ServerEngine;
@@ -34,12 +35,32 @@ public class ExperimentRunner {
             Supplier<ServerEngine>
             > serverFactories;
 
+    private final Consumer<ExperimentProgress>
+            progressListener;
+
     public ExperimentRunner(
             Experiment experiment,
             Map<
                     ServerArchitecture,
                     Supplier<ServerEngine>
                     > serverFactories
+    ) {
+
+        this(
+                experiment,
+                serverFactories,
+                null
+        );
+    }
+
+    public ExperimentRunner(
+            Experiment experiment,
+            Map<
+                    ServerArchitecture,
+                    Supplier<ServerEngine>
+                    > serverFactories,
+            Consumer<ExperimentProgress>
+                    progressListener
     ) {
 
         if (experiment == null) {
@@ -61,8 +82,14 @@ public class ExperimentRunner {
                 serverFactories
         );
 
-        this.experiment = experiment;
-        this.serverFactories = serverFactories;
+        this.experiment =
+                experiment;
+
+        this.serverFactories =
+                serverFactories;
+
+        this.progressListener =
+                progressListener;
     }
 
     public ExperimentResult run() {
@@ -73,21 +100,31 @@ public class ExperimentRunner {
                         experiment.getName()
                 );
 
-        /*
-         * Execute architectures sequentially.
-         *
-         * This keeps the current local comparison model
-         * isolated: one architecture finishes before the
-         * next architecture starts.
-         */
-        for (ServerArchitecture architecture :
-                experiment.getArchitectures()) {
+        int totalRuns =
+                experiment.getArchitectures().size()
+                        * experiment.getRepetitions();
+
+        int completedRuns = 0;
+
+        for (
+                ServerArchitecture architecture :
+                experiment.getArchitectures()
+        ) {
 
             for (
                     int repetition = 1;
                     repetition <= experiment.getRepetitions();
                     repetition++
             ) {
+
+                notifyProgress(
+                        new ExperimentProgress(
+                                architecture,
+                                repetition,
+                                completedRuns,
+                                totalRuns
+                        )
+                );
 
                 ExperimentRunResult runResult =
                         executeSingleRun(
@@ -98,10 +135,41 @@ public class ExperimentRunner {
                 experimentResult.addRunResult(
                         runResult
                 );
+
+                completedRuns++;
+
+                notifyProgress(
+                        new ExperimentProgress(
+                                architecture,
+                                repetition,
+                                completedRuns,
+                                totalRuns
+                        )
+                );
             }
         }
 
         return experimentResult;
+    }
+
+    private void notifyProgress(
+            ExperimentProgress progress
+    ) {
+
+        if (progressListener == null) {
+            return;
+        }
+
+        try {
+            progressListener.accept(
+                    progress
+            );
+        } catch (RuntimeException ignored) {
+            /*
+             * Progress reporting must never
+             * affect benchmark execution.
+             */
+        }
     }
 
     private ExperimentRunResult executeSingleRun(

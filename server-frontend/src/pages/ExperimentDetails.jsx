@@ -214,6 +214,7 @@ function ExperimentDetails({
         }
 
         let mounted = true;
+
         let intervalId = null;
 
         async function loadStatus() {
@@ -223,77 +224,63 @@ function ExperimentDetails({
                         experimentId
                     );
 
-                if (mounted) {
-                    setExperimentStatus(
-                        response
-                    );
+                if (!mounted) {
+                    return;
                 }
+
+                setExperimentStatus(
+                    response
+                );
 
                 const status =
                     response?.status;
 
+                /*
+                 * Stop polling only when the experiment
+                 * has reached a terminal state.
+                 *
+                 * IMPORTANT:
+                 * CREATED must NOT stop polling because the
+                 * user can start the experiment later while
+                 * remaining on this page.
+                 */
                 if (
                     TERMINAL_STATUSES.includes(
                         status
-                    ) ||
-                    status === "CREATED"
+                    )
                 ) {
                     if (intervalId) {
                         clearInterval(
                             intervalId
                         );
+
                         intervalId = null;
                     }
                 }
+
             } catch {
                 /*
-                 * Do not replace the complete
-                 * experiment page with a polling
-                 * error. The next polling cycle
-                 * can retry.
+                 * Keep polling.
+                 * A temporary request failure should not
+                 * permanently disable live updates.
                  */
             }
         }
 
+        /*
+         * Load immediately.
+         */
         loadStatus();
 
         /*
-         * Poll while the experiment is running.
-         * We also poll after starting below.
+         * Keep polling while the page is open.
+         * This allows CREATED -> RUNNING to be
+         * detected even when the user stays on
+         * the Details page.
          */
         intervalId = setInterval(
-            async () => {
-                try {
-                    const response =
-                        await getExperiment(
-                            experimentId
-                        );
-
-                    if (mounted) {
-                        setExperimentStatus(
-                            response
-                        );
-                    }
-
-                    const status =
-                        response?.status;
-
-                    if (
-                        TERMINAL_STATUSES.includes(
-                            status
-                        ) ||
-                        status === "CREATED"
-                    ) {
-                        clearInterval(
-                            intervalId
-                        );
-                        intervalId = null;
-                    }
-                } catch {
-                    // Retry on next cycle.
-                }
-            },
-            1500
+            loadStatus,
+            300
         );
 
         return () => {
@@ -476,6 +463,22 @@ function ExperimentDetails({
     const failedRuns =
         experimentStatus?.failedRuns ??
         null;
+
+    const completedRuns =
+        experimentStatus?.completedRuns ??
+        0;
+
+    const progressPercentage =
+        experimentStatus?.progressPercentage ??
+        0;
+
+    const currentArchitecture =
+        experimentStatus?.currentArchitecture ??
+        null;
+
+    const currentRepetition =
+        experimentStatus?.currentRepetition ??
+        0;
 
     return (
         <div className="details-page">
@@ -915,6 +918,152 @@ function ExperimentDetails({
                 </article>
 
             </section>
+
+            {/* ==================================================
+                LIVE EXECUTION PROGRESS
+            ================================================== */}
+
+            {status === "RUNNING" && (
+                <section className="details-card live-progress-card">
+
+                    <div className="details-card-header">
+
+                        <div>
+
+                            <h2>
+                                Live Execution Progress
+                            </h2>
+
+                            <p>
+                                Current benchmark execution status.
+                            </p>
+
+                        </div>
+
+                        <span className="live-indicator">
+                            <span className="live-indicator-dot" />
+                            LIVE
+                        </span>
+
+                    </div>
+
+                    <div className="live-progress-summary">
+
+                        <div className="live-progress-main">
+
+                            <span>
+                                Progress
+                            </span>
+
+                            <strong>
+                                {progressPercentage.toFixed(
+                                    0
+                                )}
+                                %
+                            </strong>
+
+                        </div>
+
+                        <div className="live-progress-track">
+
+                            <div
+                                className="live-progress-fill"
+                                style={{
+                                    width: `${Math.min(
+                                        100,
+                                        Math.max(
+                                            0,
+                                            progressPercentage
+                                        )
+                                    )}%`,
+                                }}
+                            />
+
+                        </div>
+
+                        <div className="live-progress-runs">
+
+                            <strong>
+                                {completedRuns}
+                            </strong>
+
+                            <span>
+                                {" "}
+                                of{" "}
+                                {totalRuns ?? "—"} runs completed
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                    <div className="live-progress-details">
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Current Architecture
+                            </span>
+
+                            <strong>
+                                {currentArchitecture
+                                    ? architectureNames[
+                                          currentArchitecture
+                                      ] ||
+                                      currentArchitecture
+                                    : "—"}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Repetition
+                            </span>
+
+                            <strong>
+                                {currentRepetition > 0
+                                    ? currentRepetition
+                                    : "—"}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Completed Runs
+                            </span>
+
+                            <strong>
+                                {completedRuns}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Remaining Runs
+                            </span>
+
+                            <strong>
+                                {totalRuns == null
+                                    ? "—"
+                                    : Math.max(
+                                          0,
+                                          totalRuns -
+                                              completedRuns
+                                      )}
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                </section>
+            )}
 
             {/* ==================================================
                 TARGET + ARCHITECTURES

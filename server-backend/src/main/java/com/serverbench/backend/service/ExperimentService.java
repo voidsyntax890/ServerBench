@@ -26,6 +26,7 @@ import com.serverbench.engine.benchmark.ComparisonSummary;
 import com.serverbench.engine.benchmark.EnvironmentMetadata;
 import com.serverbench.engine.benchmark.Experiment;
 import com.serverbench.engine.benchmark.ExperimentAnalyzer;
+import com.serverbench.engine.benchmark.ExperimentProgress;
 import com.serverbench.engine.benchmark.ExperimentResult;
 import com.serverbench.engine.benchmark.ExperimentRunResult;
 import com.serverbench.engine.benchmark.ExperimentRunner;
@@ -33,6 +34,10 @@ import com.serverbench.engine.benchmark.ServerArchitecture;
 import com.serverbench.engine.benchmark.ServerFactory;
 import com.serverbench.engine.core.ServerConfig;
 import com.serverbench.engine.core.ServerEngine;
+
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
 
 @Service
 public class ExperimentService {
@@ -45,6 +50,8 @@ public class ExperimentService {
     private final BenchmarkRunRepository benchmarkRunRepository;
     private final BenchmarkMetricsRepository
             benchmarkMetricsRepository;
+
+    private final Tracer tracer;
 
     /*
      * Runtime-only state.
@@ -61,7 +68,8 @@ public class ExperimentService {
                     experimentArchitectureRepository,
             BenchmarkRunRepository benchmarkRunRepository,
             BenchmarkMetricsRepository
-                    benchmarkMetricsRepository
+                    benchmarkMetricsRepository,
+            Tracer tracer
     ) {
 
         this.experimentRepository =
@@ -75,6 +83,8 @@ public class ExperimentService {
 
         this.benchmarkMetricsRepository =
                 benchmarkMetricsRepository;
+
+        this.tracer = tracer;
     }
 
     // ================================================================
@@ -337,6 +347,26 @@ public class ExperimentService {
     }
 
     // ================================================================
+    // GET PROGRESS
+    // ================================================================
+
+    public ExperimentProgress getProgress(
+            String experimentId
+    ) {
+
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord != null) {
+            return runtimeRecord.progress;
+        }
+
+        return null;
+    }
+
+    // ================================================================
     // GET COMPARISON
     // ================================================================
 
@@ -447,6 +477,30 @@ public class ExperimentService {
             ExperimentRecord record
     ) {
 
+        Span experimentSpan =
+                tracer.spanBuilder(
+                        "serverbench.experiment.execute"
+                )
+                .setAttribute(
+                        "serverbench.experiment.id",
+                        record.experiment.getId()
+                )
+                .setAttribute(
+                        "serverbench.experiment.name",
+                        record.experiment.getName()
+                )
+                .setAttribute(
+                        "serverbench.experiment.repetitions",
+                        record.experiment.getRepetitions()
+                )
+                .setAttribute(
+                        "serverbench.experiment.architecture.count",
+                        record.experiment
+                                .getArchitectures()
+                                .size()
+                )
+                .startSpan();
+
         try {
 
             Experiment experiment =
@@ -455,41 +509,198 @@ public class ExperimentService {
             ExperimentRequest request =
                     record.request;
 
+            experimentSpan.setAttribute(
+                    "serverbench.execution.mode",
+                    request
+                            .getExecutionMode()
+                            .name()
+            );
+
+            experimentSpan.setAttribute(
+                    "serverbench.target.host",
+                    request.getHost()
+            );
+
+            experimentSpan.setAttribute(
+                    "serverbench.target.port",
+                    request.getPort()
+            );
+
+            experimentSpan.setAttribute(
+                    "serverbench.concurrency",
+                    request.getConcurrency()
+            );
+
+            experimentSpan.addEvent(
+                    "serverbench.execution.started"
+            );
+
             int threadPoolSize =
                     determineThreadPoolSize(
                             request
                     );
 
-            ServerConfig serverConfig =
-                    new ServerConfig(
-                            experiment
-                                    .getBenchmarkConfig()
-                                    .getPort(),
-                            threadPoolSize,
-                            false
-                    );
-
-            Map<
-                    ServerArchitecture,
-                    Supplier<ServerEngine>
-                    > serverFactories =
-                    ServerFactory.createFactories(
-                            serverConfig
-                    );
-
-            ExperimentRunner runner =
-                    new ExperimentRunner(
-                            experiment,
-                            serverFactories
-                    );
-
-            ExperimentResult result =
-                    runner.run();
-
-            persistBenchmarkResults(
-                    record.experimentEntity,
-                    result
+            experimentSpan.setAttribute(
+                    "serverbench.thread.pool.size",
+                    threadPoolSize
             );
+
+            /*
+             * ------------------------------------------------------------
+             * BENCHMARK RUN
+             * ------------------------------------------------------------
+             */
+
+            Span benchmarkSpan =
+                    tracer.spanBuilder(
+                            "serverbench.benchmark.run"
+                    )
+                    .setAttribute(
+                            "serverbench.experiment.id",
+                            experiment.getId()
+                    )
+                    .setAttribute(
+                            "serverbench.architecture.count",
+                            experiment
+                                    .getArchitectures()
+                                    .size()
+                    )
+                    .setAttribute(
+                            "serverbench.repetitions",
+                            experiment.getRepetitions()
+                    )
+                    .startSpan();
+
+            ExperimentResult result;
+
+            try {
+
+                ServerConfig serverConfig =
+                        new ServerConfig(
+                                experiment
+                                        .getBenchmarkConfig()
+                                        .getPort(),
+                                threadPoolSize,
+                                false
+                        );
+
+                Map<
+                        ServerArchitecture,
+                        Supplier<ServerEngine>
+                        > serverFactories =
+                        ServerFactory.createFactories(
+                                serverConfig
+                        );
+
+                ExperimentRunner runner =
+                        new ExperimentRunner(
+                                experiment,
+                                serverFactories,
+                                progress ->
+                                        record.progress =
+                                                progress
+                        );
+
+                benchmarkSpan.addEvent(
+                        "serverbench.runner.started"
+                );
+
+                result =
+                        runner.run();
+
+                benchmarkSpan.addEvent(
+                        "serverbench.runner.completed"
+                );
+
+                benchmarkSpan.setAttribute(
+                        "serverbench.run.count",
+                        result
+                                .getRunResults()
+                                .size()
+                );
+
+                benchmarkSpan.setStatus(
+                        StatusCode.OK
+                );
+
+            } catch (Exception exception) {
+
+                benchmarkSpan.recordException(
+                        exception
+                );
+
+                benchmarkSpan.setStatus(
+                        StatusCode.ERROR,
+                        "Benchmark execution failed."
+                );
+
+                throw exception;
+
+            } finally {
+
+                benchmarkSpan.end();
+            }
+
+            /*
+             * ------------------------------------------------------------
+             * PERSIST RESULTS
+             * ------------------------------------------------------------
+             */
+
+            Span persistenceSpan =
+                    tracer.spanBuilder(
+                            "serverbench.results.persist"
+                    )
+                    .setAttribute(
+                            "serverbench.experiment.id",
+                            experiment.getId()
+                    )
+                    .setAttribute(
+                            "serverbench.run.count",
+                            result
+                                    .getRunResults()
+                                    .size()
+                    )
+                    .startSpan();
+
+            try {
+
+                persistBenchmarkResults(
+                        record.experimentEntity,
+                        result
+                );
+
+                persistenceSpan.addEvent(
+                        "serverbench.results.persisted"
+                );
+
+                persistenceSpan.setStatus(
+                        StatusCode.OK
+                );
+
+            } catch (Exception exception) {
+
+                persistenceSpan.recordException(
+                        exception
+                );
+
+                persistenceSpan.setStatus(
+                        StatusCode.ERROR,
+                        "Result persistence failed."
+                );
+
+                throw exception;
+
+            } finally {
+
+                persistenceSpan.end();
+            }
+
+            /*
+             * ------------------------------------------------------------
+             * FINAL EXPERIMENT STATE
+             * ------------------------------------------------------------
+             */
 
             synchronized (record) {
 
@@ -508,7 +719,29 @@ public class ExperimentService {
                 );
             }
 
+            experimentSpan.addEvent(
+                    "serverbench.experiment.completed"
+            );
+
+            experimentSpan.setAttribute(
+                    "serverbench.final.status",
+                    ExperimentStatus.COMPLETED.name()
+            );
+
+            experimentSpan.setStatus(
+                    StatusCode.OK
+            );
+
         } catch (Exception exception) {
+
+            experimentSpan.recordException(
+                    exception
+            );
+
+            experimentSpan.setStatus(
+                    StatusCode.ERROR,
+                    "Experiment execution failed."
+            );
 
             synchronized (record) {
 
@@ -528,6 +761,10 @@ public class ExperimentService {
                         record.experimentEntity
                 );
             }
+
+        } finally {
+
+            experimentSpan.end();
         }
     }
 
@@ -543,36 +780,137 @@ public class ExperimentService {
         for (ExperimentRunResult runResult :
                 experimentResult.getRunResults()) {
 
-            BenchmarkRunEntity runEntity =
-                    new BenchmarkRunEntity(
-                            experimentEntity,
-                            runResult.getArchitecture(),
-                            runResult.getRepetitionNumber(),
-                            runResult.getStatus(),
-                            runResult.getErrorMessage(),
-                            runResult.getStartedAt(),
-                            runResult.getFinishedAt()
-                    );
+            Span runPersistenceSpan =
+                    tracer.spanBuilder(
+                            "serverbench.run.persist"
+                    )
+                    .setAttribute(
+                            "serverbench.experiment.id",
+                            experimentEntity.getId()
+                    )
+                    .setAttribute(
+                            "serverbench.experiment.name",
+                            experimentEntity.getName()
+                    )
+                    .setAttribute(
+                            "serverbench.architecture",
+                            runResult
+                                    .getArchitecture()
+                                    .name()
+                    )
+                    .setAttribute(
+                            "serverbench.repetition",
+                            runResult
+                                    .getRepetitionNumber()
+                    )
+                    .setAttribute(
+                            "serverbench.run.status",
+                            runResult
+                                    .getStatus()
+                                    .name()
+                    )
+                    .startSpan();
 
-            BenchmarkRunEntity savedRun =
-                    benchmarkRunRepository.save(
-                            runEntity
-                    );
+            try {
 
-            BenchmarkResult benchmarkResult =
-                    runResult.getBenchmarkResult();
-
-            if (benchmarkResult != null) {
-
-                BenchmarkMetricsEntity metricsEntity =
-                        toBenchmarkMetricsEntity(
-                                savedRun,
-                                benchmarkResult
+                BenchmarkRunEntity runEntity =
+                        new BenchmarkRunEntity(
+                                experimentEntity,
+                                runResult.getArchitecture(),
+                                runResult.getRepetitionNumber(),
+                                runResult.getStatus(),
+                                runResult.getErrorMessage(),
+                                runResult.getStartedAt(),
+                                runResult.getFinishedAt()
                         );
 
-                benchmarkMetricsRepository.save(
-                        metricsEntity
+                BenchmarkRunEntity savedRun =
+                        benchmarkRunRepository.save(
+                                runEntity
+                        );
+
+                BenchmarkResult benchmarkResult =
+                        runResult.getBenchmarkResult();
+
+                if (benchmarkResult != null) {
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.total.requests",
+                            benchmarkResult
+                                    .getTotalRequests()
+                    );
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.successful.requests",
+                            benchmarkResult
+                                    .getSuccessfulRequests()
+                    );
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.failed.requests",
+                            benchmarkResult
+                                    .getFailedRequests()
+                    );
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.throughput",
+                            benchmarkResult
+                                    .getThroughputRequestsPerSecond()
+                    );
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.average.latency.ms",
+                            benchmarkResult
+                                    .getAverageLatencyMs()
+                    );
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.p95.latency.ms",
+                            benchmarkResult
+                                    .getP95LatencyMs()
+                    );
+
+                    runPersistenceSpan.setAttribute(
+                            "serverbench.run.p99.latency.ms",
+                            benchmarkResult
+                                    .getP99LatencyMs()
+                    );
+
+                    BenchmarkMetricsEntity metricsEntity =
+                            toBenchmarkMetricsEntity(
+                                    savedRun,
+                                    benchmarkResult
+                            );
+
+                    benchmarkMetricsRepository.save(
+                            metricsEntity
+                    );
+                }
+
+                runPersistenceSpan.addEvent(
+                        "serverbench.run.persisted"
                 );
+
+                runPersistenceSpan.setStatus(
+                        StatusCode.OK
+                );
+
+            } catch (Exception exception) {
+
+                runPersistenceSpan.recordException(
+                        exception
+                );
+
+                runPersistenceSpan.setStatus(
+                        StatusCode.ERROR,
+                        "Benchmark run persistence failed."
+                );
+
+                throw exception;
+
+            } finally {
+
+                runPersistenceSpan.end();
             }
         }
     }
@@ -1070,6 +1408,9 @@ public class ExperimentService {
         private volatile ExperimentResult result;
         private volatile String errorMessage;
 
+        private volatile ExperimentProgress
+                progress;
+
         private volatile CompletableFuture<Void>
                 executionFuture;
 
@@ -1093,6 +1434,8 @@ public class ExperimentService {
 
             this.errorMessage =
                     "";
+
+            this.progress = null;
         }
     }
 }

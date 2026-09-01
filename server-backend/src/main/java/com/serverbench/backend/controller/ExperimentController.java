@@ -214,7 +214,11 @@ public class ExperimentController {
                         experiment,
                         status,
                         result,
-                        errorMessage
+                        errorMessage,
+                        experimentService
+                                .getProgress(
+                                        experimentId
+                                )
                 );
 
         return ResponseEntity.ok(
