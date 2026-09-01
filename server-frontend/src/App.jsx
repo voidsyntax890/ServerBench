@@ -1,4 +1,8 @@
-import { useState } from "react";
+import {
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
 
 import NewExperiment from "./pages/NewExperiment";
 import ExperimentDetails from "./pages/ExperimentDetails";
@@ -7,6 +11,11 @@ import Comparison from "./pages/Comparison";
 import History from "./pages/History";
 import Experiments from "./pages/Experiments";
 import Settings from "./pages/Settings";
+
+import {
+    getExperiments,
+    getExperimentComparison,
+} from "./services/experimentApi";
 
 import {
     Bar,
@@ -24,152 +33,72 @@ import "./App.css";
 
 /*
  * ================================================================
- * TEMPORARY UI DATA
- * ================================================================
- *
- * These values are only for the current UI-development phase.
- *
- * Later:
- *
- * React
- *    ↓
- * Spring Boot REST API
- *    ↓
- * PostgreSQL
- *
- * All of these mock values will be removed.
- */
-
-const recentExperiments = [
-    {
-        id: "0debaf9f-6004-4a40-9bac-4dc43239a2ec",
-        name: "M5 Restart Persistence Test",
-        status: "COMPLETED",
-        architectures: "4 / 4",
-        repetitions: 1,
-        date: "31 Aug 2026, 12:01 AM",
-    },
-    {
-        id: "d3920e39-95f3-405c-a412-7f9fb28219d2",
-        name: "M5 Metrics Persistence Test",
-        status: "COMPLETED",
-        architectures: "4 / 4",
-        repetitions: 1,
-        date: "30 Aug 2026, 11:49 PM",
-    },
-    {
-        id: "a76e0575-818e-40d6-a6ac-2fd3f4522a98",
-        name: "M5 Run Persistence Test",
-        status: "COMPLETED",
-        architectures: "4 / 4",
-        repetitions: 1,
-        date: "30 Aug 2026, 11:45 PM",
-    },
-    {
-        id: "dea0a3f5-99be-483e-af36-ef81e52ba11c",
-        name: "M4 Final Four Architecture Test",
-        status: "COMPLETED",
-        architectures: "4 / 4",
-        repetitions: 1,
-        date: "29 Aug 2026, 06:04 PM",
-    },
-    {
-        id: "failure-test",
-        name: "Failure Handling Test",
-        status: "FAILED",
-        architectures: "4 / 4",
-        repetitions: 1,
-        date: "29 Aug 2026, 05:40 PM",
-    },
-];
-
-const throughputData = [
-    {
-        architecture: "Single Threaded",
-        throughput: 14028,
-    },
-    {
-        architecture: "Multi Threaded",
-        throughput: 66336,
-    },
-    {
-        architecture: "Thread Pool",
-        throughput: 63016,
-    },
-    {
-        architecture: "Virtual Thread",
-        throughput: 49548,
-    },
-];
-
-const trendData = [
-    {
-        date: "25 Aug",
-        single: 12000,
-        multi: 62000,
-        pool: 54000,
-        virtual: 36000,
-    },
-    {
-        date: "26 Aug",
-        single: 13000,
-        multi: 70000,
-        pool: 49000,
-        virtual: 41000,
-    },
-    {
-        date: "27 Aug",
-        single: 13500,
-        multi: 73500,
-        pool: 54000,
-        virtual: 39000,
-    },
-    {
-        date: "28 Aug",
-        single: 12500,
-        multi: 71500,
-        pool: 51000,
-        virtual: 43000,
-    },
-    {
-        date: "29 Aug",
-        single: 14000,
-        multi: 76000,
-        pool: 55000,
-        virtual: 41000,
-    },
-    {
-        date: "30 Aug",
-        single: 13800,
-        multi: 74500,
-        pool: 53000,
-        virtual: 39000,
-    },
-    {
-        date: "31 Aug",
-        single: 14028,
-        multi: 66336,
-        pool: 63016,
-        virtual: 49548,
-    },
-];
-
-/*
- * ================================================================
  * STATUS BADGE
  * ================================================================
  */
 
 function StatusBadge({ status }) {
+    const safeStatus =
+        status || "UNKNOWN";
+
     return (
         <span
-            className={`status-badge status-${status.toLowerCase()}`}
+            className={`status-badge status-${safeStatus.toLowerCase()}`}
         >
             <span className="status-dot" />
-            {status}
+            {safeStatus}
         </span>
     );
 }
+
+/*
+ * ================================================================
+ * DATE FORMATTER
+ * ================================================================
+ */
+
+function formatDateTime(value) {
+    if (!value) {
+        return "—";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString(
+        undefined,
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }
+    );
+}
+
+/*
+ * ================================================================
+ * ARCHITECTURE HELPERS
+ * ================================================================
+ */
+
+const architectureNames = {
+    SINGLE_THREADED: "Single Threaded",
+    MULTI_THREADED: "Multi Threaded",
+    THREAD_POOL: "Thread Pool",
+    VIRTUAL_THREAD: "Virtual Thread",
+};
+
+const architectureKeys = {
+    SINGLE_THREADED: "single",
+    MULTI_THREADED: "multi",
+    THREAD_POOL: "pool",
+    VIRTUAL_THREAD: "virtual",
+};
 
 /*
  * ================================================================
@@ -180,20 +109,368 @@ function StatusBadge({ status }) {
 function App() {
 
     /*
-     * Current screen.
-     *
-     * Later this will eventually be replaced by proper routing.
+     * ------------------------------------------------------------
+     * Navigation
+     * ------------------------------------------------------------
      */
+
     const [currentPage, setCurrentPage] =
         useState("dashboard");
 
-    /*
-     * Stores the experiment currently being viewed.
-     *
-     * This is the important addition for our comparison problem.
-     */
     const [currentExperimentId, setCurrentExperimentId] =
         useState(null);
+
+    /*
+     * ------------------------------------------------------------
+     * Dashboard data
+     * ------------------------------------------------------------
+     */
+
+    const [experiments, setExperiments] =
+        useState([]);
+
+    const [dashboardComparisons, setDashboardComparisons] =
+        useState([]);
+
+    const [dashboardLoading, setDashboardLoading] =
+        useState(true);
+
+    const [dashboardError, setDashboardError] =
+        useState("");
+
+    /*
+     * ------------------------------------------------------------
+     * Load dashboard data
+     * ------------------------------------------------------------
+     */
+
+    useEffect(() => {
+        let mounted = true;
+
+        async function loadDashboard() {
+            setDashboardLoading(true);
+            setDashboardError("");
+
+            try {
+                const response =
+                    await getExperiments();
+
+                const experimentList =
+                    Array.isArray(response)
+                        ? response
+                        : response?.experiments || [];
+
+                if (!mounted) {
+                    return;
+                }
+
+                setExperiments(
+                    experimentList
+                );
+
+                /*
+                 * Only completed experiments have
+                 * meaningful comparison results.
+                 *
+                 * We use the newest completed
+                 * experiments for the dashboard.
+                 */
+                const completedExperiments =
+                    experimentList
+                        .filter(
+                            (experiment) =>
+                                experiment.status ===
+                                "COMPLETED"
+                        )
+                        .sort(
+                            (a, b) =>
+                                new Date(
+                                    b.createdAt
+                                ) -
+                                new Date(
+                                    a.createdAt
+                                )
+                        );
+
+                /*
+                 * Latest completed experiment
+                 * becomes the Performance Overview.
+                 */
+                if (
+                    completedExperiments.length >
+                        0 &&
+                    !currentExperimentId
+                ) {
+                    setCurrentExperimentId(
+                        completedExperiments[0].id
+                    );
+                }
+
+                /*
+                 * Load comparison data for up to
+                 * seven recent completed experiments.
+                 *
+                 * This is used to create a real
+                 * performance trend.
+                 */
+                const recentCompleted =
+                    completedExperiments.slice(
+                        0,
+                        7
+                    );
+
+                const comparisonResults =
+                    await Promise.all(
+                        recentCompleted.map(
+                            async (
+                                experiment
+                            ) => {
+                                try {
+                                    const comparison =
+                                        await getExperimentComparison(
+                                            experiment.id
+                                        );
+
+                                    return {
+                                        experiment,
+                                        comparison,
+                                    };
+                                } catch {
+                                    return null;
+                                }
+                            }
+                        )
+                    );
+
+                if (mounted) {
+                    setDashboardComparisons(
+                        comparisonResults.filter(
+                            Boolean
+                        )
+                    );
+                }
+
+            } catch (error) {
+                if (mounted) {
+                    setDashboardError(
+                        error.message ||
+                            "Unable to load dashboard data."
+                    );
+                }
+            } finally {
+                if (mounted) {
+                    setDashboardLoading(
+                        false
+                    );
+                }
+            }
+        }
+
+        loadDashboard();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    /*
+     * ------------------------------------------------------------
+     * Dashboard calculations
+     * ------------------------------------------------------------
+     */
+
+    const totalExperiments =
+        experiments.length;
+
+    const completedExperiments =
+        experiments.filter(
+            (experiment) =>
+                experiment.status ===
+                "COMPLETED"
+        ).length;
+
+    const runningExperiments =
+        experiments.filter(
+            (experiment) =>
+                experiment.status ===
+                "RUNNING"
+        ).length;
+
+    const failedExperiments =
+        experiments.filter(
+            (experiment) =>
+                experiment.status ===
+                "FAILED"
+        ).length;
+
+    const completionRate =
+        totalExperiments === 0
+            ? 0
+            : (
+                  (completedExperiments /
+                      totalExperiments) *
+                  100
+              ).toFixed(0);
+
+    const failureRate =
+        totalExperiments === 0
+            ? 0
+            : (
+                  (failedExperiments /
+                      totalExperiments) *
+                  100
+              ).toFixed(0);
+
+    /*
+     * Newest five experiments for dashboard table.
+     */
+    const recentExperiments =
+        useMemo(() => {
+            return [...experiments]
+                .sort(
+                    (a, b) =>
+                        new Date(
+                            b.createdAt
+                        ) -
+                        new Date(
+                            a.createdAt
+                        )
+                )
+                .slice(0, 5)
+                .map(
+                    (experiment) => ({
+                        ...experiment,
+
+                        architectures:
+                            Array.isArray(
+                                experiment.architectures
+                            )
+                                ? `${experiment.architectures.length} / ${experiment.architectures.length}`
+                                : "—",
+
+                        date:
+                            formatDateTime(
+                                experiment.createdAt
+                            ),
+                    })
+                );
+        }, [experiments]);
+
+    /*
+     * ------------------------------------------------------------
+     * Latest completed comparison
+     * ------------------------------------------------------------
+     */
+
+    const latestComparison =
+        useMemo(() => {
+            if (
+                dashboardComparisons.length ===
+                0
+            ) {
+                return null;
+            }
+
+            return (
+                dashboardComparisons[0]
+                    ?.comparison || null
+            );
+        }, [
+            dashboardComparisons,
+        ]);
+
+    /*
+     * ------------------------------------------------------------
+     * Performance Overview
+     * ------------------------------------------------------------
+     */
+
+    const throughputData =
+        useMemo(() => {
+            if (
+                !latestComparison ||
+                !Array.isArray(
+                    latestComparison.comparisons
+                )
+            ) {
+                return [];
+            }
+
+            return latestComparison.comparisons.map(
+                (item) => ({
+                    architecture:
+                        architectureNames[
+                            item.architecture
+                        ] ||
+                        item.architecture,
+
+                    throughput:
+                        Number(
+                            item.averageThroughput ||
+                                0
+                        ),
+                })
+            );
+        }, [
+            latestComparison,
+        ]);
+
+    /*
+     * ------------------------------------------------------------
+     * Performance Trend
+     *
+     * This is based on the seven latest completed
+     * experiments returned by the backend.
+     * It is NOT fabricated daily data.
+     * ------------------------------------------------------------
+     */
+
+    const trendData =
+        useMemo(() => {
+            return dashboardComparisons
+                .slice()
+                .reverse()
+                .map(
+                    ({
+                        experiment,
+                        comparison,
+                    }) => {
+                        const point = {
+                            date: formatDateTime(
+                                experiment.createdAt
+                            ).split(",")[0],
+                        };
+
+                        if (
+                            Array.isArray(
+                                comparison?.comparisons
+                            )
+                        ) {
+                            comparison.comparisons.forEach(
+                                (item) => {
+                                    const key =
+                                        architectureKeys[
+                                            item
+                                                .architecture
+                                        ];
+
+                                    if (key) {
+                                        point[key] =
+                                            Number(
+                                                item.averageThroughput ||
+                                                    0
+                                            );
+                                    }
+                                }
+                            );
+                        }
+
+                        return point;
+                    }
+                );
+        }, [
+            dashboardComparisons,
+        ]);
 
     /*
      * ------------------------------------------------------------
@@ -216,11 +493,44 @@ function App() {
     const openComparison = (
         experimentId = null
     ) => {
+        /*
+         * If no ID was supplied from Dashboard,
+         * use the newest completed experiment.
+         *
+         * This prevents the Comparison page from
+         * opening with no experiment selected.
+         */
+        if (!experimentId) {
+            const newestCompleted =
+                [...experiments]
+                    .filter(
+                        (experiment) =>
+                            experiment.status ===
+                            "COMPLETED"
+                    )
+                    .sort(
+                        (a, b) =>
+                            new Date(
+                                b.createdAt
+                            ) -
+                            new Date(
+                                a.createdAt
+                            )
+                    )[0];
+
+            if (newestCompleted) {
+                experimentId =
+                    newestCompleted.id;
+            }
+        }
+
         setCurrentExperimentId(
             experimentId
         );
 
-        setCurrentPage("comparison");
+        setCurrentPage(
+            "comparison"
+        );
     };
 
     const openSettings = () => {
@@ -228,7 +538,9 @@ function App() {
     };
 
     const openNewExperiment = () => {
-        setCurrentPage("new-experiment");
+        setCurrentPage(
+            "new-experiment"
+        );
     };
 
     const openExperimentDetails = (
@@ -268,7 +580,9 @@ function App() {
                             openDashboard
                         }
 
-                        onCreated={(experiment) => {
+                        onCreated={(
+                            experiment
+                        ) => {
 
                             setCurrentExperimentId(
                                 experiment.id
@@ -304,6 +618,7 @@ function App() {
                 <main className="main-content">
 
                     <Experiments
+
                         onBack={
                             openDashboard
                         }
@@ -319,6 +634,7 @@ function App() {
                         onNewExperiment={
                             openNewExperiment
                         }
+
                     />
 
                 </main>
@@ -465,7 +781,7 @@ function App() {
 
                         onBack={() =>
                             setCurrentPage(
-                                "dashboard"
+                                "results"
                             )
                         }
 
@@ -554,9 +870,10 @@ function App() {
                     <a
                         href="#"
                         className="nav-item active"
-                        onClick={(event) => {
+                        onClick={(
+                            event
+                        ) => {
                             event.preventDefault();
-
                             openDashboard();
                         }}
                     >
@@ -570,9 +887,10 @@ function App() {
                     <a
                         href="#"
                         className="nav-item"
-                        onClick={(event) => {
+                        onClick={(
+                            event
+                        ) => {
                             event.preventDefault();
-
                             openExperiments();
                         }}
                     >
@@ -586,9 +904,10 @@ function App() {
                     <a
                         href="#"
                         className="nav-item"
-                        onClick={(event) => {
+                        onClick={(
+                            event
+                        ) => {
                             event.preventDefault();
-
                             openHistory();
                         }}
                     >
@@ -602,9 +921,10 @@ function App() {
                     <a
                         href="#"
                         className="nav-item"
-                        onClick={(event) => {
+                        onClick={(
+                            event
+                        ) => {
                             event.preventDefault();
-
                             openComparison();
                         }}
                     >
@@ -618,9 +938,10 @@ function App() {
                     <a
                         href="#"
                         className="nav-item"
-                        onClick={(event) => {
+                        onClick={(
+                            event
+                        ) => {
                             event.preventDefault();
-
                             openSettings();
                         }}
                     >
@@ -764,6 +1085,31 @@ function App() {
                     </section>
 
                     {/* ==================================================
+                        DASHBOARD ERROR
+                    ================================================== */}
+
+                    {dashboardError && (
+                        <section className="dashboard-section">
+
+                            <article className="card">
+
+                                <div
+                                    style={{
+                                        padding:
+                                            "20px",
+                                        color:
+                                            "#dc2626",
+                                    }}
+                                >
+                                    {dashboardError}
+                                </div>
+
+                            </article>
+
+                        </section>
+                    )}
+
+                    {/* ==================================================
                         KPI CARDS
                     ================================================== */}
 
@@ -784,7 +1130,9 @@ function App() {
                             </div>
 
                             <div className="metric-value">
-                                24
+                                {dashboardLoading
+                                    ? "—"
+                                    : totalExperiments}
                             </div>
 
                             <div className="metric-footer">
@@ -808,11 +1156,15 @@ function App() {
                             </div>
 
                             <div className="metric-value">
-                                18
+                                {dashboardLoading
+                                    ? "—"
+                                    : completedExperiments}
                             </div>
 
                             <div className="metric-footer">
-                                75% completion rate
+                                {dashboardLoading
+                                    ? "Loading..."
+                                    : `${completionRate}% completion rate`}
                             </div>
 
                         </article>
@@ -832,7 +1184,9 @@ function App() {
                             </div>
 
                             <div className="metric-value">
-                                2
+                                {dashboardLoading
+                                    ? "—"
+                                    : runningExperiments}
                             </div>
 
                             <div className="metric-footer">
@@ -856,11 +1210,15 @@ function App() {
                             </div>
 
                             <div className="metric-value">
-                                4
+                                {dashboardLoading
+                                    ? "—"
+                                    : failedExperiments}
                             </div>
 
                             <div className="metric-footer">
-                                17% failure rate
+                                {dashboardLoading
+                                    ? "Loading..."
+                                    : `${failureRate}% failure rate`}
                             </div>
 
                         </article>
@@ -939,69 +1297,106 @@ function App() {
 
                                     <tbody>
 
-                                        {recentExperiments.map(
-                                            (experiment) => (
-                                                <tr
-                                                    key={
-                                                        experiment.id
-                                                    }
+                                        {dashboardLoading ? (
+                                            <tr>
+
+                                                <td
+                                                    colSpan="6"
+                                                    style={{
+                                                        textAlign:
+                                                            "center",
+                                                        padding:
+                                                            "30px",
+                                                    }}
                                                 >
+                                                    Loading experiments...
+                                                </td>
 
-                                                    <td>
+                                            </tr>
+                                        ) : recentExperiments.length ===
+                                          0 ? (
+                                            <tr>
 
-                                                        <span className="experiment-name">
+                                                <td
+                                                    colSpan="6"
+                                                    style={{
+                                                        textAlign:
+                                                            "center",
+                                                        padding:
+                                                            "30px",
+                                                    }}
+                                                >
+                                                    No experiments found.
+                                                </td>
+
+                                            </tr>
+                                        ) : (
+                                            recentExperiments.map(
+                                                (
+                                                    experiment
+                                                ) => (
+                                                    <tr
+                                                        key={
+                                                            experiment.id
+                                                        }
+                                                    >
+
+                                                        <td>
+
+                                                            <span className="experiment-name">
+                                                                {
+                                                                    experiment.name
+                                                                }
+                                                            </span>
+
+                                                        </td>
+
+                                                        <td>
+
+                                                            <StatusBadge
+                                                                status={
+                                                                    experiment.status
+                                                                }
+                                                            />
+
+                                                        </td>
+
+                                                        <td>
                                                             {
-                                                                experiment.name
+                                                                experiment.architectures
                                                             }
-                                                        </span>
+                                                        </td>
 
-                                                    </td>
-
-                                                    <td>
-
-                                                        <StatusBadge
-                                                            status={
-                                                                experiment.status
+                                                        <td>
+                                                            {
+                                                                experiment.repetitions
                                                             }
-                                                        />
+                                                        </td>
 
-                                                    </td>
-
-                                                    <td>
-                                                        {
-                                                            experiment.architectures
-                                                        }
-                                                    </td>
-
-                                                    <td>
-                                                        {
-                                                            experiment.repetitions
-                                                        }
-                                                    </td>
-
-                                                    <td>
-                                                        {
-                                                            experiment.date
-                                                        }
-                                                    </td>
-
-                                                    <td>
-
-                                                        <button
-                                                            className="view-button"
-                                                            type="button"
-                                                            onClick={() =>
-                                                                openExperimentDetails(
-                                                                    experiment.id
-                                                                )
+                                                        <td>
+                                                            {
+                                                                experiment.date
                                                             }
-                                                        >
-                                                            View
-                                                        </button>
+                                                        </td>
 
-                                                    </td>
+                                                        <td>
 
-                                                </tr>
+                                                            <button
+                                                                className="view-button"
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    openExperimentDetails(
+                                                                        experiment.id
+                                                                    )
+                                                                }
+                                                            >
+                                                                View
+                                                            </button>
+
+                                                        </td>
+
+                                                    </tr>
+                                                )
                                             )
                                         )}
 
@@ -1033,7 +1428,7 @@ function App() {
 
                                     <p>
                                         Throughput from the latest
-                                        benchmark
+                                        completed benchmark
                                     </p>
 
                                 </div>
@@ -1046,82 +1441,117 @@ function App() {
 
                             <div className="chart-container bar-chart-container">
 
-                                <ResponsiveContainer
-                                    width="100%"
-                                    height={360}
-                                >
-
-                                    <BarChart
-                                        data={
-                                            throughputData
-                                        }
-
-                                        margin={{
-                                            top: 20,
-                                            right: 24,
-                                            left: 10,
-                                            bottom: 20,
+                                {dashboardLoading ? (
+                                    <div
+                                        style={{
+                                            height:
+                                                "360px",
+                                            display:
+                                                "flex",
+                                            alignItems:
+                                                "center",
+                                            justifyContent:
+                                                "center",
+                                            color:
+                                                "#94a3b8",
+                                            fontSize:
+                                                "13px",
                                         }}
                                     >
+                                        Loading performance data...
+                                    </div>
+                                ) : throughputData.length ===
+                                  0 ? (
+                                    <div
+                                        style={{
+                                            height:
+                                                "360px",
+                                            display:
+                                                "flex",
+                                            alignItems:
+                                                "center",
+                                            justifyContent:
+                                                "center",
+                                            color:
+                                                "#94a3b8",
+                                            fontSize:
+                                                "13px",
+                                        }}
+                                    >
+                                        No completed benchmark results available.
+                                    </div>
+                                ) : (
+                                    <ResponsiveContainer
+                                        width="100%"
+                                        height={360}
+                                    >
 
-                                        <CartesianGrid
-                                            stroke="#eef2f7"
-                                            vertical={false}
-                                        />
+                                        <BarChart
+                                            data={
+                                                throughputData
+                                            }
 
-                                        <XAxis
-                                            dataKey="architecture"
-                                            tick={{
-                                                fill: "#64748b",
-                                                fontSize: 11,
+                                            margin={{
+                                                top: 20,
+                                                right: 24,
+                                                left: 10,
+                                                bottom: 20,
                                             }}
-                                            axisLine={{
-                                                stroke: "#dbe2ea",
-                                            }}
-                                            tickLine={false}
-                                        />
+                                        >
 
-                                        <YAxis
-                                            tick={{
-                                                fill: "#64748b",
-                                                fontSize: 11,
-                                            }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                        />
+                                            <CartesianGrid
+                                                stroke="#eef2f7"
+                                                vertical={false}
+                                            />
 
-                                        <Tooltip
-                                            formatter={(value) => [
-                                                `${Number(
+                                            <XAxis
+                                                dataKey="architecture"
+                                                tick={{
+                                                    fill: "#64748b",
+                                                    fontSize: 11,
+                                                }}
+                                                axisLine={{
+                                                    stroke: "#dbe2ea",
+                                                }}
+                                                tickLine={false}
+                                            />
+
+                                            <YAxis
+                                                tick={{
+                                                    fill: "#64748b",
+                                                    fontSize: 11,
+                                                }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                            />
+
+                                            <Tooltip
+                                                formatter={(
                                                     value
-                                                ).toLocaleString()} req/s`,
-                                                "Throughput",
-                                            ]}
-                                            contentStyle={{
-                                                border:
-                                                    "1px solid #e5e7eb",
-                                                borderRadius:
-                                                    "8px",
-                                                boxShadow:
-                                                    "0 4px 16px rgba(15, 23, 42, 0.08)",
-                                            }}
-                                        />
+                                                ) => [
+                                                    `${Number(
+                                                        value
+                                                    ).toLocaleString()} req/s`,
+                                                    "Throughput",
+                                                ]}
+                                            />
 
-                                        <Bar
-                                            dataKey="throughput"
-                                            fill="#2563eb"
-                                            radius={[
-                                                5,
-                                                5,
-                                                0,
-                                                0,
-                                            ]}
-                                            barSize={56}
-                                        />
+                                            <Bar
+                                                dataKey="throughput"
+                                                fill="#2563eb"
+                                                radius={[
+                                                    5,
+                                                    5,
+                                                    0,
+                                                    0,
+                                                ]}
+                                                barSize={56}
+                                            />
 
-                                    </BarChart>
+                                        </BarChart>
 
-                                </ResponsiveContainer>
+                                    </ResponsiveContainer>
+                                )}
 
                             </div>
 
@@ -1146,8 +1576,8 @@ function App() {
                                     </h2>
 
                                     <p>
-                                        Throughput across server
-                                        architectures
+                                        Throughput across recent
+                                        completed experiments
                                     </p>
 
                                 </div>
@@ -1160,113 +1590,162 @@ function App() {
 
                             <div className="chart-container">
 
-                                <ResponsiveContainer
-                                    width="100%"
-                                    height={380}
-                                >
-
-                                    <LineChart
-                                        data={
-                                            trendData
-                                        }
-
-                                        margin={{
-                                            top: 20,
-                                            right: 24,
-                                            left: 10,
-                                            bottom: 10,
+                                {dashboardLoading ? (
+                                    <div
+                                        style={{
+                                            height:
+                                                "380px",
+                                            display:
+                                                "flex",
+                                            alignItems:
+                                                "center",
+                                            justifyContent:
+                                                "center",
+                                            color:
+                                                "#94a3b8",
+                                            fontSize:
+                                                "13px",
                                         }}
                                     >
+                                        Loading trend data...
+                                    </div>
+                                ) : trendData.length ===
+                                  0 ? (
+                                    <div
+                                        style={{
+                                            height:
+                                                "380px",
+                                            display:
+                                                "flex",
+                                            alignItems:
+                                                "center",
+                                            justifyContent:
+                                                "center",
+                                            color:
+                                                "#94a3b8",
+                                            fontSize:
+                                                "13px",
+                                        }}
+                                    >
+                                        Not enough completed experiments for a trend.
+                                    </div>
+                                ) : (
+                                    <ResponsiveContainer
+                                        width="100%"
+                                        height={380}
+                                    >
 
-                                        <CartesianGrid
-                                            stroke="#eef2f7"
-                                            vertical={false}
-                                        />
+                                        <LineChart
+                                            data={
+                                                trendData
+                                            }
 
-                                        <XAxis
-                                            dataKey="date"
-                                            tick={{
-                                                fill: "#64748b",
-                                                fontSize: 11,
+                                            margin={{
+                                                top: 20,
+                                                right: 24,
+                                                left: 10,
+                                                bottom: 10,
                                             }}
-                                            axisLine={{
-                                                stroke: "#dbe2ea",
-                                            }}
-                                            tickLine={false}
-                                        />
+                                        >
 
-                                        <YAxis
-                                            tick={{
-                                                fill: "#64748b",
-                                                fontSize: 11,
-                                            }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                        />
+                                            <CartesianGrid
+                                                stroke="#eef2f7"
+                                                vertical={false}
+                                            />
 
-                                        <Tooltip
-                                            formatter={(
-                                                value,
-                                                name
-                                            ) => [
-                                                `${Number(
-                                                    value
-                                                ).toLocaleString()} req/s`,
-                                                name,
-                                            ]}
-                                            contentStyle={{
-                                                border:
-                                                    "1px solid #e5e7eb",
-                                                borderRadius:
-                                                    "8px",
-                                                boxShadow:
-                                                    "0 4px 16px rgba(15, 23, 42, 0.08)",
-                                            }}
-                                        />
+                                            <XAxis
+                                                dataKey="date"
+                                                tick={{
+                                                    fill: "#64748b",
+                                                    fontSize: 11,
+                                                }}
+                                                axisLine={{
+                                                    stroke: "#dbe2ea",
+                                                }}
+                                                tickLine={false}
+                                            />
 
-                                        <Line
-                                            type="monotone"
-                                            dataKey="single"
-                                            name="Single Threaded"
-                                            stroke="#2563eb"
-                                            strokeWidth={2.5}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 5 }}
-                                        />
+                                            <YAxis
+                                                tick={{
+                                                    fill: "#64748b",
+                                                    fontSize: 11,
+                                                }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                            />
 
-                                        <Line
-                                            type="monotone"
-                                            dataKey="multi"
-                                            name="Multi Threaded"
-                                            stroke="#16a34a"
-                                            strokeWidth={2.5}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 5 }}
-                                        />
+                                            <Tooltip
+                                                formatter={(
+                                                    value,
+                                                    name
+                                                ) => [
+                                                    `${Number(
+                                                        value
+                                                    ).toLocaleString()} req/s`,
+                                                    name,
+                                                ]}
+                                            />
 
-                                        <Line
-                                            type="monotone"
-                                            dataKey="pool"
-                                            name="Thread Pool"
-                                            stroke="#f59e0b"
-                                            strokeWidth={2.5}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 5 }}
-                                        />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="single"
+                                                name="Single Threaded"
+                                                stroke="#2563eb"
+                                                strokeWidth={2.5}
+                                                dot={{
+                                                    r: 3,
+                                                }}
+                                                activeDot={{
+                                                    r: 5,
+                                                }}
+                                            />
 
-                                        <Line
-                                            type="monotone"
-                                            dataKey="virtual"
-                                            name="Virtual Thread"
-                                            stroke="#8b5cf6"
-                                            strokeWidth={2.5}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 5 }}
-                                        />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="multi"
+                                                name="Multi Threaded"
+                                                stroke="#16a34a"
+                                                strokeWidth={2.5}
+                                                dot={{
+                                                    r: 3,
+                                                }}
+                                                activeDot={{
+                                                    r: 5,
+                                                }}
+                                            />
 
-                                    </LineChart>
+                                            <Line
+                                                type="monotone"
+                                                dataKey="pool"
+                                                name="Thread Pool"
+                                                stroke="#f59e0b"
+                                                strokeWidth={2.5}
+                                                dot={{
+                                                    r: 3,
+                                                }}
+                                                activeDot={{
+                                                    r: 5,
+                                                }}
+                                            />
 
-                                </ResponsiveContainer>
+                                            <Line
+                                                type="monotone"
+                                                dataKey="virtual"
+                                                name="Virtual Thread"
+                                                stroke="#8b5cf6"
+                                                strokeWidth={2.5}
+                                                dot={{
+                                                    r: 3,
+                                                }}
+                                                activeDot={{
+                                                    r: 5,
+                                                }}
+                                            />
+
+                                        </LineChart>
+
+                                    </ResponsiveContainer>
+                                )}
 
                             </div>
 
@@ -1379,7 +1858,7 @@ function App() {
                                         </strong>
 
                                         <small>
-                                            Select an experiment to compare
+                                            Compare the latest completed experiment
                                         </small>
 
                                     </span>

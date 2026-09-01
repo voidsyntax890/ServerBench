@@ -85,7 +85,7 @@
     line-height: 1.5;
 }
 
-.details-header-main > div:last-child > p {
+.details-header-main>div:last-child>p {
     margin: 9px 0 0;
 
     color: #64748b;
@@ -560,7 +560,7 @@
    RUN INFORMATION
 ================================================================ */
 
-.details-page > .details-card {
+.details-page>.details-card {
     margin-top: 20px;
 }
 
@@ -631,9 +631,7 @@
 @media (max-width: 700px) {
     .details-page {
         padding:
-            24px
-            18px
-            44px;
+            24px 18px 44px;
     }
 
     .details-header {
@@ -665,8 +663,7 @@
         flex: none;
 
         margin:
-            0 0
-            0 16px;
+            0 0 0 16px;
     }
 
     .details-architecture-list {
@@ -679,5 +676,60 @@
 
     .details-card {
         padding: 20px;
+    }
+
+    /* ================================================================
+   DATA STATES
+================================================================ */
+
+    .details-state {
+        min-height: 260px;
+
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        gap: 8px;
+
+        text-align: center;
+
+        color: #64748b;
+    }
+
+    .details-state strong {
+        color: #334155;
+        font-size: 15px;
+    }
+
+    .details-state span {
+        color: #94a3b8;
+        font-size: 12px;
+    }
+
+    .details-state-error strong {
+        color: #dc2626;
+    }
+
+    .details-state-error button {
+        margin-top: 12px;
+    }
+
+    /* ================================================================
+   START / EXECUTION ERROR
+================================================================ */
+
+    .start-error-card {
+        margin-bottom: 18px;
+        min-height: 100px;
+        padding: 20px;
+    }
+
+    .start-error-card strong {
+        color: #dc2626;
+    }
+
+    .start-error-card span {
+        color: #64748b;
     }
 }

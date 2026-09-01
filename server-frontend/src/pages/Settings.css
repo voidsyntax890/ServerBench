@@ -159,7 +159,7 @@
     border-bottom: 0;
 }
 
-.settings-row > div {
+.settings-row>div {
     display: flex;
     flex-direction: column;
 
@@ -206,9 +206,7 @@
 
     .settings-page {
         padding:
-            24px
-            18px
-            44px;
+            24px 18px 44px;
     }
 
     .settings-card {
@@ -226,6 +224,283 @@
 
     .settings-row strong {
         text-align: left;
+    }
+
+    /* ================================================================
+   FUNCTIONAL SETTINGS
+================================================================ */
+
+    .settings-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+    }
+
+    .settings-save-button {
+        border: none;
+        border-radius: 8px;
+
+        padding: 10px 16px;
+
+        background: #2563eb;
+        color: white;
+
+        font-size: 12px;
+        font-weight: 600;
+
+        cursor: pointer;
+
+        transition:
+            transform 0.15s ease,
+            opacity 0.15s ease;
+    }
+
+    .settings-save-button:hover {
+        transform: translateY(-1px);
+    }
+
+    .settings-status-connected {
+        color: #16a34a;
+    }
+
+    .settings-status-dot {
+        display: inline-block;
+
+        width: 7px;
+        height: 7px;
+
+        margin-right: 6px;
+
+        border-radius: 50%;
+
+        background: currentColor;
+    }
+
+    .settings-option-group {
+        padding: 4px 0;
+    }
+
+    .settings-helper {
+        display: block;
+
+        margin-top: 8px;
+
+        color: #94a3b8;
+
+        font-size: 11px;
+    }
+
+    .settings-segmented {
+        display: flex;
+
+        gap: 8px;
+
+        margin-top: 10px;
+
+        flex-wrap: wrap;
+    }
+
+    .settings-segmented button {
+        border: 1px solid #dbe2ea;
+        border-radius: 8px;
+
+        padding: 9px 14px;
+
+        background: white;
+        color: #475569;
+
+        font-size: 12px;
+        font-weight: 600;
+
+        cursor: pointer;
+
+        transition:
+            background 0.15s ease,
+            border-color 0.15s ease,
+            color 0.15s ease;
+    }
+
+    .settings-segmented button:hover {
+        border-color: #94a3b8;
+    }
+
+    .settings-segmented button.active {
+        border-color: #2563eb;
+
+        background: #eff6ff;
+
+        color: #2563eb;
+    }
+
+    .settings-select {
+        min-width: 130px;
+
+        border: 1px solid #dbe2ea;
+        border-radius: 7px;
+
+        padding: 8px 10px;
+
+        background: white;
+        color: #334155;
+
+        font-size: 12px;
+    }
+
+    .settings-select:disabled {
+        opacity: 0.5;
+
+        cursor: not-allowed;
+    }
+
+    .settings-switch {
+        position: relative;
+
+        display: inline-flex;
+
+        width: 42px;
+        height: 24px;
+
+        cursor: pointer;
+    }
+
+    .settings-switch input {
+        position: absolute;
+
+        opacity: 0;
+
+        pointer-events: none;
+    }
+
+    .settings-switch span {
+        position: absolute;
+
+        inset: 0;
+
+        border-radius: 999px;
+
+        background: #cbd5e1;
+
+        transition:
+            background 0.2s ease;
+    }
+
+    .settings-switch span::after {
+        content: "";
+
+        position: absolute;
+
+        width: 18px;
+        height: 18px;
+
+        top: 3px;
+        left: 3px;
+
+        border-radius: 50%;
+
+        background: white;
+
+        box-shadow:
+            0 1px 3px rgba(15, 23, 42, 0.2);
+
+        transition:
+            transform 0.2s ease;
+    }
+
+    .settings-switch input:checked+span {
+        background: #2563eb;
+    }
+
+    .settings-switch input:checked+span::after {
+        transform: translateX(18px);
+    }
+
+    .settings-danger-card {
+        border-color: #fee2e2;
+    }
+
+    .settings-reset-button {
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+
+        padding: 9px 14px;
+
+        background: #fff;
+
+        color: #dc2626;
+
+        font-size: 12px;
+        font-weight: 600;
+
+        cursor: pointer;
+    }
+
+    .settings-reset-button:hover {
+        background: #fef2f2;
+    }
+
+    /* ================================================================
+   DARK THEME
+================================================================ */
+
+    html[data-theme="dark"] {
+        background: #0f172a;
+        color-scheme: dark;
+    }
+
+    html[data-theme="dark"] body {
+        background: #0f172a;
+    }
+
+    /*
+ * Settings page
+ */
+
+    html[data-theme="dark"] .settings-page {
+        color: #e2e8f0;
+    }
+
+    html[data-theme="dark"] .settings-card {
+        background: #111827;
+        border-color: #1e293b;
+    }
+
+    html[data-theme="dark"] .settings-card-header h2 {
+        color: #f8fafc;
+    }
+
+    html[data-theme="dark"] .settings-card-header p,
+    html[data-theme="dark"] .settings-helper,
+    html[data-theme="dark"] .settings-note,
+    html[data-theme="dark"] .settings-row small {
+        color: #94a3b8;
+    }
+
+    html[data-theme="dark"] .settings-label,
+    html[data-theme="dark"] .settings-row strong {
+        color: #e2e8f0;
+    }
+
+    html[data-theme="dark"] .settings-segmented button,
+    html[data-theme="dark"] .settings-select {
+        background: #0f172a;
+        border-color: #334155;
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .settings-segmented button.active {
+        background: #172554;
+        border-color: #3b82f6;
+        color: #60a5fa;
+    }
+
+    html[data-theme="dark"] .settings-danger-card {
+        border-color: #451a1a;
+    }
+
+    html[data-theme="dark"] .settings-reset-button {
+        background: #111827;
+        border-color: #7f1d1d;
     }
 
 }

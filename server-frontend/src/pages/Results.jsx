@@ -1,108 +1,15 @@
+import {
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
+
+import {
+    getExperimentResults,
+    getExperiment,
+} from "../services/experimentApi";
+
 import "./Results.css";
-
-const experiment = {
-    id: "0debaf9f-6004-4a40-9bac-4dc43239a2ec",
-    name: "M5 Restart Persistence Test",
-    status: "COMPLETED",
-    totalRuns: 4,
-    successfulRuns: 4,
-    failedRuns: 0,
-};
-
-const runs = [
-    {
-        architecture: "SINGLE_THREADED",
-        totalRequests: 42089,
-        successfulRequests: 42085,
-        failedRequests: 4,
-        throughput: 14028.33,
-        averageLatency: 0.0000475,
-        p50: 0,
-        p95: 0,
-        p99: 0,
-        successRate: 99.99,
-        errorRate: 0.01,
-        totalDuration: 3000,
-        status: "COMPLETED",
-        failures: {
-            connectTimeouts: 0,
-            connectionRefused: 0,
-            connectionResets: 0,
-            readTimeouts: 4,
-            noResponseFailures: 0,
-            otherIoFailures: 0,
-        },
-    },
-    {
-        architecture: "MULTI_THREADED",
-        totalRequests: 199008,
-        successfulRequests: 199008,
-        failedRequests: 0,
-        throughput: 66336,
-        averageLatency: 0.0004975,
-        p50: 0,
-        p95: 0,
-        p99: 0,
-        successRate: 100,
-        errorRate: 0,
-        totalDuration: 3000,
-        status: "COMPLETED",
-        failures: {
-            connectTimeouts: 0,
-            connectionRefused: 0,
-            connectionResets: 0,
-            readTimeouts: 0,
-            noResponseFailures: 0,
-            otherIoFailures: 0,
-        },
-    },
-    {
-        architecture: "THREAD_POOL",
-        totalRequests: 189047,
-        successfulRequests: 189047,
-        failedRequests: 0,
-        throughput: 63015.67,
-        averageLatency: 0.0006136,
-        p50: 0,
-        p95: 0,
-        p99: 0,
-        successRate: 100,
-        errorRate: 0,
-        totalDuration: 3000,
-        status: "COMPLETED",
-        failures: {
-            connectTimeouts: 0,
-            connectionRefused: 0,
-            connectionResets: 0,
-            readTimeouts: 0,
-            noResponseFailures: 0,
-            otherIoFailures: 0,
-        },
-    },
-    {
-        architecture: "VIRTUAL_THREAD",
-        totalRequests: 148643,
-        successfulRequests: 148643,
-        failedRequests: 0,
-        throughput: 49547.67,
-        averageLatency: 0.00037,
-        p50: 0,
-        p95: 0,
-        p99: 0,
-        successRate: 100,
-        errorRate: 0,
-        totalDuration: 3000,
-        status: "COMPLETED",
-        failures: {
-            connectTimeouts: 0,
-            connectionRefused: 0,
-            connectionResets: 0,
-            readTimeouts: 0,
-            noResponseFailures: 0,
-            otherIoFailures: 0,
-        },
-    },
-];
 
 const architectureNames = {
     SINGLE_THREADED: "Single Threaded",
@@ -112,28 +19,89 @@ const architectureNames = {
 };
 
 function StatusBadge({ status }) {
+    const safeStatus =
+        status || "UNKNOWN";
+
     return (
-        <span className={`results-status results-status-${status.toLowerCase()}`}>
+        <span
+            className={`results-status results-status-${safeStatus.toLowerCase()}`}
+        >
             <span className="results-status-dot" />
-            {status}
+            {safeStatus}
         </span>
     );
 }
 
 function formatNumber(value) {
-    return Number(value).toLocaleString(undefined, {
-        maximumFractionDigits: 2,
-    });
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return number.toLocaleString(
+        undefined,
+        {
+            maximumFractionDigits: 2,
+        }
+    );
+}
+
+function formatDecimal(
+    value,
+    digits = 4
+) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return number.toFixed(digits);
 }
 
 function formatLatency(value) {
-    return `${Number(value).toFixed(4)} ms`;
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return `${number.toFixed(4)} ms`;
 }
 
-function MetricBox({ label, value, helper }) {
+function formatDateTime(value) {
+    if (!value) {
+        return "—";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString(
+        undefined,
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }
+    );
+}
+
+function MetricBox({
+    label,
+    value,
+    helper,
+}) {
     return (
         <div className="result-metric-box">
             <span>{label}</span>
+
             <strong>{value}</strong>
 
             {helper && (
@@ -143,35 +111,273 @@ function MetricBox({ label, value, helper }) {
     );
 }
 
-function Results({ onBack, onComparison }) {
-    const highestThroughput = Math.max(
-        ...runs.map((run) => run.throughput)
-    );
+function Results({
+    experimentId,
+    onBack,
+    onComparison,
+}) {
+    const [result, setResult] =
+        useState(null);
 
-    const overallSuccessfulRequests = runs.reduce(
-        (total, run) =>
-            total + run.successfulRequests,
-        0
-    );
+    const [experiment, setExperiment] =
+        useState(null);
 
-    const overallFailedRequests = runs.reduce(
-        (total, run) =>
-            total + run.failedRequests,
-        0
-    );
+    const [isLoading, setIsLoading] =
+        useState(true);
 
-    const overallTotalRequests =
-        overallSuccessfulRequests +
-        overallFailedRequests;
+    const [loadError, setLoadError] =
+        useState("");
 
-    const overallSuccessRate =
-        overallTotalRequests === 0
+    useEffect(() => {
+        let mounted = true;
+
+        async function loadResults() {
+            if (!experimentId) {
+                if (mounted) {
+                    setResult(null);
+                    setExperiment(null);
+                    setLoadError(
+                        "No experiment was selected."
+                    );
+                    setIsLoading(false);
+                }
+
+                return;
+            }
+
+            setIsLoading(true);
+            setLoadError("");
+
+            try {
+                const [
+                    resultsResponse,
+                    experimentResponse,
+                ] = await Promise.all([
+                    getExperimentResults(
+                        experimentId
+                    ),
+                    getExperiment(
+                        experimentId
+                    ),
+                ]);
+
+                if (mounted) {
+                    setResult(
+                        resultsResponse
+                    );
+                    setExperiment(
+                        experimentResponse
+                    );
+                }
+            } catch (error) {
+                if (mounted) {
+                    setResult(null);
+                    setExperiment(null);
+
+                    setLoadError(
+                        error.message ||
+                            "Unable to load experiment results."
+                    );
+                }
+            } finally {
+                if (mounted) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        loadResults();
+
+        return () => {
+            mounted = false;
+        };
+    }, [experimentId]);
+
+    const runs = useMemo(() => {
+        if (!Array.isArray(result?.runs)) {
+            return [];
+        }
+
+        return result.runs;
+    }, [result]);
+
+    const overallMetrics =
+        useMemo(() => {
+            let successfulRequests = 0;
+            let failedRequests = 0;
+            let totalDuration = 0;
+
+            for (const run of runs) {
+                const benchmark =
+                    run.benchmarkResult;
+
+                if (!benchmark) {
+                    continue;
+                }
+
+                successfulRequests +=
+                    Number(
+                        benchmark.successfulRequests ||
+                            0
+                    );
+
+                failedRequests +=
+                    Number(
+                        benchmark.failedRequests ||
+                            0
+                    );
+
+                totalDuration +=
+                    Number(
+                        benchmark.totalDurationMs ||
+                            0
+                    );
+            }
+
+            const totalRequests =
+                successfulRequests +
+                failedRequests;
+
+            const successRate =
+                totalRequests === 0
+                    ? 0
+                    : (
+                          (successfulRequests /
+                              totalRequests) *
+                          100
+                      );
+
+            return {
+                successfulRequests,
+                failedRequests,
+                totalRequests,
+                successRate,
+                totalDuration,
+            };
+        }, [runs]);
+
+    const highestThroughput =
+        useMemo(() => {
+            if (runs.length === 0) {
+                return 0;
+            }
+
+            return Math.max(
+                ...runs.map(
+                    (run) =>
+                        Number(
+                            run.benchmarkResult
+                                ?.throughputRequestsPerSecond ||
+                                0
+                        )
+                )
+            );
+        }, [runs]);
+
+    if (isLoading) {
+        return (
+            <div className="results-page">
+
+                <div className="results-state">
+
+                    <strong>
+                        Loading results...
+                    </strong>
+
+                    <span>
+                        Retrieving benchmark measurements from ServerBench.
+                    </span>
+
+                </div>
+
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="results-page">
+
+                <section className="results-state results-state-error">
+
+                    <strong>
+                        Unable to load results.
+                    </strong>
+
+                    <span>
+                        {loadError}
+                    </span>
+
+                    <button
+                        className="results-back-button"
+                        type="button"
+                        onClick={onBack}
+                    >
+                        <span>←</span>
+                        Back to Experiment
+                    </button>
+
+                </section>
+
+            </div>
+        );
+    }
+
+    if (!result) {
+        return (
+            <div className="results-page">
+
+                <section className="results-state results-state-error">
+
+                    <strong>
+                        Results are not available.
+                    </strong>
+
+                    <span>
+                        This experiment does not have persisted benchmark results yet.
+                    </span>
+
+                    <button
+                        className="results-back-button"
+                        type="button"
+                        onClick={onBack}
+                    >
+                        <span>←</span>
+                        Back to Experiment
+                    </button>
+
+                </section>
+
+            </div>
+        );
+    }
+
+    const experimentName =
+        result.experimentName ||
+        experiment?.name ||
+        "Experiment";
+
+    const experimentStatus =
+        experiment?.status ||
+        "COMPLETED";
+
+    const totalRuns =
+        result.totalRuns ?? runs.length;
+
+    const successfulRuns =
+        result.successfulRuns ?? 0;
+
+    const failedRuns =
+        result.failedRuns ?? 0;
+
+    const completionRate =
+        totalRuns === 0
             ? 0
             : (
-                  (overallSuccessfulRequests /
-                      overallTotalRequests) *
+                  (successfulRuns /
+                      totalRuns) *
                   100
-              ).toFixed(2);
+              );
 
     return (
         <div className="results-page">
@@ -200,16 +406,22 @@ function Results({ onBack, onComparison }) {
                     <div className="results-title-row">
 
                         <div>
-                            <h1>{experiment.name}</h1>
+
+                            <h1>
+                                {experimentName}
+                            </h1>
 
                             <p>
                                 Detailed benchmark measurements
                                 from the completed experiment.
                             </p>
+
                         </div>
 
                         <StatusBadge
-                            status={experiment.status}
+                            status={
+                                experimentStatus
+                            }
                         />
 
                     </div>
@@ -236,38 +448,57 @@ function Results({ onBack, onComparison }) {
                 <div className="results-summary-main">
 
                     <div>
+
                         <span className="summary-eyebrow">
                             Execution Summary
                         </span>
 
                         <h2>
-                            {experiment.successfulRuns}
+
+                            {
+                                successfulRuns
+                            }
+
                             <span>
                                 {" "}
                                 of{" "}
-                                {experiment.totalRuns}
+                                {totalRuns}
                             </span>
+
                         </h2>
 
                         <p>
                             benchmark runs completed successfully
                         </p>
+
                     </div>
 
                     <div className="summary-progress-area">
 
                         <div className="summary-progress-label">
-                            <span>Completion</span>
-                            <strong>100%</strong>
+
+                            <span>
+                                Completion
+                            </span>
+
+                            <strong>
+                                {completionRate.toFixed(
+                                    0
+                                )}
+                                %
+                            </strong>
+
                         </div>
 
                         <div className="summary-progress-track">
+
                             <div
                                 className="summary-progress-fill"
                                 style={{
-                                    width: "100%",
+                                    width: `${completionRate}%`,
                                 }}
                             />
+
                         </div>
 
                     </div>
@@ -279,41 +510,68 @@ function Results({ onBack, onComparison }) {
                 <div className="summary-stat-row">
 
                     <div>
-                        <span>Total Requests</span>
+
+                        <span>
+                            Total Requests
+                        </span>
+
                         <strong>
                             {formatNumber(
-                                overallTotalRequests
+                                overallMetrics.totalRequests
                             )}
                         </strong>
+
                     </div>
 
                     <div>
-                        <span>Successful Requests</span>
+
+                        <span>
+                            Successful Requests
+                        </span>
+
                         <strong>
                             {formatNumber(
-                                overallSuccessfulRequests
+                                overallMetrics.successfulRequests
                             )}
                         </strong>
+
                     </div>
 
                     <div>
-                        <span>Failed Requests</span>
-                        <strong className={
-                            overallFailedRequests > 0
-                                ? "warning-value"
-                                : ""
-                        }>
+
+                        <span>
+                            Failed Requests
+                        </span>
+
+                        <strong
+                            className={
+                                overallMetrics.failedRequests >
+                                0
+                                    ? "warning-value"
+                                    : ""
+                            }
+                        >
                             {formatNumber(
-                                overallFailedRequests
+                                overallMetrics.failedRequests
                             )}
                         </strong>
+
                     </div>
 
                     <div>
-                        <span>Overall Success Rate</span>
+
+                        <span>
+                            Overall Success Rate
+                        </span>
+
                         <strong>
-                            {overallSuccessRate}%
+                            {formatDecimal(
+                                overallMetrics.successRate,
+                                2
+                            )}
+                            %
                         </strong>
+
                     </div>
 
                 </div>
@@ -324,323 +582,566 @@ function Results({ onBack, onComparison }) {
                 RUN RESULTS
             ================================================== */}
 
-            {runs.map((run) => {
+            {runs.length === 0 ? (
+                <section className="result-run-card">
 
-                const barWidth =
-                    highestThroughput === 0
-                        ? 0
-                        : (run.throughput /
-                              highestThroughput) *
-                          100;
+                    <div className="results-state">
 
-                return (
-                    <section
-                        className="result-run-card"
-                        key={run.architecture}
-                    >
+                        <strong>
+                            No benchmark runs available.
+                        </strong>
 
-                        {/* ==================================================
-                            RUN HEADER
-                        ================================================== */}
+                        <span>
+                            The experiment has no persisted run results.
+                        </span>
 
-                        <div className="run-header">
+                    </div>
 
-                            <div className="run-title-group">
+                </section>
+            ) : (
+                runs.map((run) => {
 
-                                <div className="run-architecture-icon">
-                                    {run.architecture ===
-                                        "SINGLE_THREADED" && "1"}
+                    const benchmark =
+                        run.benchmarkResult;
 
-                                    {run.architecture ===
-                                        "MULTI_THREADED" && "M"}
+                    const throughput =
+                        Number(
+                            benchmark
+                                ?.throughputRequestsPerSecond ||
+                                0
+                        );
 
-                                    {run.architecture ===
-                                        "THREAD_POOL" && "P"}
+                    const barWidth =
+                        highestThroughput === 0
+                            ? 0
+                            : (throughput /
+                                  highestThroughput) *
+                              100;
 
-                                    {run.architecture ===
-                                        "VIRTUAL_THREAD" && "V"}
+                    const totalRequests =
+                        Number(
+                            benchmark?.totalRequests ||
+                                0
+                        );
 
-                                </div>
+                    const successfulRequests =
+                        Number(
+                            benchmark?.successfulRequests ||
+                                0
+                        );
 
-                                <div>
+                    const failedRequests =
+                        Number(
+                            benchmark?.failedRequests ||
+                                0
+                        );
 
-                                    <h2>
-                                        {
-                                            architectureNames[
+                    const successRate =
+                        Number(
+                            benchmark?.successRate ||
+                                0
+                        );
+
+                    const errorRate =
+                        Number(
+                            benchmark?.errorRate ||
+                                0
+                        );
+
+                    return (
+                        <section
+                            className="result-run-card"
+                            key={`${run.architecture}-${run.repetitionNumber}`}
+                        >
+
+                            {/* ==================================================
+                                RUN HEADER
+                            ================================================== */}
+
+                            <div className="run-header">
+
+                                <div className="run-title-group">
+
+                                    <div className="run-architecture-icon">
+
+                                        {run.architecture ===
+                                            "SINGLE_THREADED" &&
+                                            "1"}
+
+                                        {run.architecture ===
+                                            "MULTI_THREADED" &&
+                                            "M"}
+
+                                        {run.architecture ===
+                                            "THREAD_POOL" &&
+                                            "P"}
+
+                                        {run.architecture ===
+                                            "VIRTUAL_THREAD" &&
+                                            "V"}
+
+                                    </div>
+
+                                    <div>
+
+                                        <h2>
+                                            {
+                                                architectureNames[
+                                                    run.architecture
+                                                ] ||
                                                 run.architecture
-                                            ]
-                                        }
-                                    </h2>
+                                            }
+                                        </h2>
 
-                                    <p>
-                                        Repetition 1
-                                    </p>
+                                        <p>
+                                            Repetition{" "}
+                                            {
+                                                run.repetitionNumber
+                                            }
+                                        </p>
+
+                                    </div>
 
                                 </div>
 
-                            </div>
-
-                            <StatusBadge
-                                status={run.status}
-                            />
-
-                        </div>
-
-                        {/* ==================================================
-                            PRIMARY METRICS
-                        ================================================== */}
-
-                        <div className="primary-metrics-grid">
-
-                            <MetricBox
-                                label="Throughput"
-                                value={`${formatNumber(
-                                    run.throughput
-                                )} req/s`}
-                                helper="Requests per second"
-                            />
-
-                            <MetricBox
-                                label="Average Latency"
-                                value={formatLatency(
-                                    run.averageLatency
-                                )}
-                                helper="Mean request latency"
-                            />
-
-                            <MetricBox
-                                label="Success Rate"
-                                value={`${run.successRate.toFixed(
-                                    2
-                                )}%`}
-                                helper={`${formatNumber(
-                                    run.successfulRequests
-                                )} successful`}
-                            />
-
-                            <MetricBox
-                                label="Total Requests"
-                                value={formatNumber(
-                                    run.totalRequests
-                                )}
-                                helper={`${formatNumber(
-                                    run.failedRequests
-                                )} failed`}
-                            />
-
-                        </div>
-
-                        {/* ==================================================
-                            THROUGHPUT
-                        ================================================== */}
-
-                        <div className="throughput-section">
-
-                            <div className="metric-section-header">
-
-                                <div>
-                                    <h3>
-                                        Throughput
-                                    </h3>
-
-                                    <p>
-                                        Relative throughput for
-                                        this experiment.
-                                    </p>
-                                </div>
-
-                                <strong>
-                                    {formatNumber(
-                                        run.throughput
-                                    )} req/s
-                                </strong>
-
-                            </div>
-
-                            <div className="throughput-track">
-
-                                <div
-                                    className="throughput-fill"
-                                    style={{
-                                        width:
-                                            `${barWidth}%`,
-                                    }}
+                                <StatusBadge
+                                    status={
+                                        run.status
+                                    }
                                 />
 
                             </div>
 
-                        </div>
+                            {/* ==================================================
+                                PRIMARY METRICS
+                            ================================================== */}
 
-                        {/* ==================================================
-                            LATENCY METRICS
-                        ================================================== */}
+                            <div className="primary-metrics-grid">
 
-                        <div className="latency-section">
+                                <MetricBox
+                                    label="Throughput"
+                                    value={`${formatNumber(
+                                        throughput
+                                    )} req/s`}
+                                    helper="Requests per second"
+                                />
 
-                            <div className="metric-section-header">
-                                <div>
-                                    <h3>
-                                        Latency Distribution
-                                    </h3>
+                                <MetricBox
+                                    label="Average Latency"
+                                    value={formatLatency(
+                                        benchmark?.averageLatencyMs
+                                    )}
+                                    helper="Mean request latency"
+                                />
 
-                                    <p>
-                                        Percentile latency measurements.
-                                    </p>
-                                </div>
-                            </div>
+                                <MetricBox
+                                    label="Success Rate"
+                                    value={`${formatDecimal(
+                                        successRate,
+                                        2
+                                    )}%`}
+                                    helper={`${formatNumber(
+                                        successfulRequests
+                                    )} successful`}
+                                />
 
-                            <div className="latency-grid">
-
-                                <div>
-                                    <span>Minimum</span>
-                                    <strong>
-                                        {run.p50 === 0
-                                            ? "0.0000"
-                                            : formatLatency(
-                                                  run.p50
-                                              )}
-                                    </strong>
-                                </div>
-
-                                <div>
-                                    <span>P50</span>
-                                    <strong>
-                                        {formatLatency(
-                                            run.p50
-                                        )}
-                                    </strong>
-                                </div>
-
-                                <div>
-                                    <span>P95</span>
-                                    <strong>
-                                        {formatLatency(
-                                            run.p95
-                                        )}
-                                    </strong>
-                                </div>
-
-                                <div>
-                                    <span>P99</span>
-                                    <strong>
-                                        {formatLatency(
-                                            run.p99
-                                        )}
-                                    </strong>
-                                </div>
+                                <MetricBox
+                                    label="Total Requests"
+                                    value={formatNumber(
+                                        totalRequests
+                                    )}
+                                    helper={`${formatNumber(
+                                        failedRequests
+                                    )} failed`}
+                                />
 
                             </div>
 
-                        </div>
+                            {/* ==================================================
+                                THROUGHPUT
+                            ================================================== */}
 
-                        {/* ==================================================
-                            FAILURE BREAKDOWN
-                        ================================================== */}
-
-                        {run.failedRequests > 0 && (
-                            <div className="failure-section">
+                            <div className="throughput-section">
 
                                 <div className="metric-section-header">
+
                                     <div>
+
                                         <h3>
-                                            Failure Breakdown
+                                            Throughput
                                         </h3>
 
                                         <p>
-                                            Categorized request failures
-                                            for this run.
+                                            Relative throughput for
+                                            this experiment.
                                         </p>
+
                                     </div>
+
+                                    <strong>
+                                        {formatNumber(
+                                            throughput
+                                        )}{" "}
+                                        req/s
+                                    </strong>
+
                                 </div>
 
-                                <div className="failure-grid">
+                                <div className="throughput-track">
+
+                                    <div
+                                        className="throughput-fill"
+                                        style={{
+                                            width: `${barWidth}%`,
+                                        }}
+                                    />
+
+                                </div>
+
+                            </div>
+
+                            {/* ==================================================
+                                LATENCY METRICS
+                            ================================================== */}
+
+                            <div className="latency-section">
+
+                                <div className="metric-section-header">
 
                                     <div>
+
+                                        <h3>
+                                            Latency Distribution
+                                        </h3>
+
+                                        <p>
+                                            Percentile latency measurements.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div className="latency-grid">
+
+                                    <div>
+
                                         <span>
-                                            Connect Timeouts
+                                            Minimum
                                         </span>
 
                                         <strong>
-                                            {
-                                                run.failures
-                                                    .connectTimeouts
-                                            }
+                                            {formatLatency(
+                                                benchmark?.minimumLatencyMs
+                                            )}
                                         </strong>
+
                                     </div>
 
                                     <div>
+
                                         <span>
-                                            Connection Refused
+                                            P50
                                         </span>
 
                                         <strong>
-                                            {
-                                                run.failures
-                                                    .connectionRefused
-                                            }
+                                            {formatLatency(
+                                                benchmark?.p50LatencyMs
+                                            )}
                                         </strong>
+
                                     </div>
 
                                     <div>
+
                                         <span>
-                                            Connection Resets
+                                            P95
                                         </span>
 
                                         <strong>
-                                            {
-                                                run.failures
-                                                    .connectionResets
-                                            }
+                                            {formatLatency(
+                                                benchmark?.p95LatencyMs
+                                            )}
                                         </strong>
+
                                     </div>
 
                                     <div>
-                                        <span>
-                                            Read Timeouts
-                                        </span>
 
-                                        <strong className="failure-value">
-                                            {
-                                                run.failures
-                                                    .readTimeouts
-                                            }
-                                        </strong>
-                                    </div>
-
-                                    <div>
                                         <span>
-                                            No Response
+                                            P99
                                         </span>
 
                                         <strong>
-                                            {
-                                                run.failures
-                                                    .noResponseFailures
-                                            }
+                                            {formatLatency(
+                                                benchmark?.p99LatencyMs
+                                            )}
                                         </strong>
-                                    </div>
 
-                                    <div>
-                                        <span>
-                                            Other I/O Failures
-                                        </span>
-
-                                        <strong>
-                                            {
-                                                run.failures
-                                                    .otherIoFailures
-                                            }
-                                        </strong>
                                     </div>
 
                                 </div>
 
                             </div>
-                        )}
 
-                    </section>
-                );
-            })}
+                            {/* ==================================================
+                                FAILURE BREAKDOWN
+                            ================================================== */}
+
+                            {failedRequests > 0 && (
+                                <div className="failure-section">
+
+                                    <div className="metric-section-header">
+
+                                        <div>
+
+                                            <h3>
+                                                Failure Breakdown
+                                            </h3>
+
+                                            <p>
+                                                Categorized request failures
+                                                for this run.
+                                            </p>
+
+                                        </div>
+
+                                    </div>
+
+                                    <div className="failure-grid">
+
+                                        <div>
+
+                                            <span>
+                                                Connect Timeouts
+                                            </span>
+
+                                            <strong>
+                                                {
+                                                    benchmark
+                                                        ?.connectTimeouts ??
+                                                    0
+                                                }
+                                            </strong>
+
+                                        </div>
+
+                                        <div>
+
+                                            <span>
+                                                Connection Refused
+                                            </span>
+
+                                            <strong>
+                                                {
+                                                    benchmark
+                                                        ?.connectionRefused ??
+                                                    0
+                                                }
+                                            </strong>
+
+                                        </div>
+
+                                        <div>
+
+                                            <span>
+                                                Connection Resets
+                                            </span>
+
+                                            <strong>
+                                                {
+                                                    benchmark
+                                                        ?.connectionResets ??
+                                                    0
+                                                }
+                                            </strong>
+
+                                        </div>
+
+                                        <div>
+
+                                            <span>
+                                                Read Timeouts
+                                            </span>
+
+                                            <strong className="failure-value">
+                                                {
+                                                    benchmark
+                                                        ?.readTimeouts ??
+                                                    0
+                                                }
+                                            </strong>
+
+                                        </div>
+
+                                        <div>
+
+                                            <span>
+                                                No Response
+                                            </span>
+
+                                            <strong>
+                                                {
+                                                    benchmark
+                                                        ?.noResponseFailures ??
+                                                    0
+                                                }
+                                            </strong>
+
+                                        </div>
+
+                                        <div>
+
+                                            <span>
+                                                Other I/O Failures
+                                            </span>
+
+                                            <strong>
+                                                {
+                                                    benchmark
+                                                        ?.otherIoFailures ??
+                                                    0
+                                                }
+                                            </strong>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+                            )}
+
+                            {/* ==================================================
+                                RUN TIMING
+                            ================================================== */}
+
+                            <div className="latency-section">
+
+                                <div className="metric-section-header">
+
+                                    <div>
+
+                                        <h3>
+                                            Run Timing
+                                        </h3>
+
+                                        <p>
+                                            Timing captured by the benchmark engine.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div className="latency-grid">
+
+                                    <div>
+
+                                        <span>
+                                            Started
+                                        </span>
+
+                                        <strong>
+                                            {formatDateTime(
+                                                run.startedAt
+                                            )}
+                                        </strong>
+
+                                    </div>
+
+                                    <div>
+
+                                        <span>
+                                            Finished
+                                        </span>
+
+                                        <strong>
+                                            {formatDateTime(
+                                                run.finishedAt
+                                            )}
+                                        </strong>
+
+                                    </div>
+
+                                    <div>
+
+                                        <span>
+                                            Duration
+                                        </span>
+
+                                        <strong>
+                                            {formatNumber(
+                                                benchmark?.totalDurationMs
+                                            )}{" "}
+                                            ms
+                                        </strong>
+
+                                    </div>
+
+                                    <div>
+
+                                        <span>
+                                            Error Rate
+                                        </span>
+
+                                        <strong>
+                                            {formatDecimal(
+                                                errorRate,
+                                                2
+                                            )}
+                                            %
+                                        </strong>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            {run.status ===
+                                "FAILED" &&
+                                run.errorMessage && (
+                                    <div className="failure-section">
+
+                                        <div className="metric-section-header">
+
+                                            <div>
+
+                                                <h3>
+                                                    Run Error
+                                                </h3>
+
+                                                <p>
+                                                    The benchmark engine reported the following failure.
+                                                </p>
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="failure-grid">
+
+                                            <div>
+                                                <span>
+                                                    Error
+                                                </span>
+
+                                                <strong className="failure-value">
+                                                    {
+                                                        run.errorMessage
+                                                    }
+                                                </strong>
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+                                )}
+
+                        </section>
+                    );
+                })
+            )}
 
             {/* ==================================================
                 FOOTER ACTION
@@ -649,12 +1150,16 @@ function Results({ onBack, onComparison }) {
             <section className="results-bottom-action">
 
                 <div>
-                    <h2>Ready to compare?</h2>
+
+                    <h2>
+                        Ready to compare?
+                    </h2>
 
                     <p>
-                        Review all four architectures side by side
-                        to understand their relative performance.
+                        Review the measured architecture
+                        performance side by side.
                     </p>
+
                 </div>
 
                 <button

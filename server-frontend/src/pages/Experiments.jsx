@@ -1,57 +1,40 @@
-import "./Experiments.css";
+import { useEffect, useState } from "react";
 
-const experiments = [
-    {
-        id: "0debaf9f-6004-4a40-9bac-4dc43239a2ec",
-        name: "M5 Restart Persistence Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        date: "31 Aug 2026, 12:01 AM",
-    },
-    {
-        id: "d3920e39-95f3-405c-a412-7f9fb28219d2",
-        name: "M5 Metrics Persistence Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        date: "30 Aug 2026, 11:49 PM",
-    },
-    {
-        id: "a76e0575-818e-40d6-a6ac-2fd3f4522a98",
-        name: "M5 Run Persistence Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        date: "30 Aug 2026, 11:45 PM",
-    },
-    {
-        id: "dea0a3f5-99be-483e-af36-ef81e52ba11c",
-        name: "M4 Final Four Architecture Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        date: "29 Aug 2026, 06:04 PM",
-    },
-    {
-        id: "97f65b2e-99ab-41eb-97be-f6b00c42cbaa",
-        name: "M5 Persistence Test",
-        status: "CREATED",
-        architectures: 4,
-        repetitions: 1,
-        date: "30 Aug 2026, 11:39 PM",
-    },
-];
+import { getExperiments } from "../services/experimentApi";
+
+import "./Experiments.css";
 
 function StatusBadge({ status }) {
     return (
         <span
-            className={`experiment-status status-${status.toLowerCase()}`}
+            className={`experiment-status status-${String(
+                status
+            ).toLowerCase()}`}
         >
             <span className="experiment-status-dot" />
             {status}
         </span>
     );
+}
+
+function formatCreatedAt(value) {
+    if (!value) {
+        return "—";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
 function Experiments({
@@ -60,6 +43,55 @@ function Experiments({
     onCompare,
     onNewExperiment,
 }) {
+    const [experiments, setExperiments] =
+        useState([]);
+
+    const [isLoading, setIsLoading] =
+        useState(true);
+
+    const [loadError, setLoadError] =
+        useState("");
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadExperiments = async () => {
+            setIsLoading(true);
+            setLoadError("");
+
+            try {
+                const response =
+                    await getExperiments();
+
+                const data =
+                    Array.isArray(response)
+                        ? response
+                        : response?.experiments || [];
+
+                if (isMounted) {
+                    setExperiments(data);
+                }
+            } catch (error) {
+                if (isMounted) {
+                    setLoadError(
+                        error.message ||
+                            "Unable to load experiments."
+                    );
+                }
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        loadExperiments();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
     return (
         <div className="experiments-page">
 
@@ -119,130 +151,190 @@ function Experiments({
                     </div>
 
                     <span className="experiments-count">
-                        {experiments.length} experiments
+                        {experiments.length}{" "}
+                        {experiments.length === 1
+                            ? "experiment"
+                            : "experiments"}
                     </span>
 
                 </div>
 
-                <div className="experiments-table-wrapper">
+                {isLoading && (
+                    <div className="experiments-state">
+                        Loading experiments...
+                    </div>
+                )}
 
-                    <table className="experiments-list-table">
+                {!isLoading && loadError && (
+                    <div className="experiments-state experiments-state-error">
+                        <strong>
+                            Unable to load experiments.
+                        </strong>
 
-                        <thead>
-                            <tr>
-                                <th>Experiment</th>
-                                <th>Status</th>
-                                <th>Architectures</th>
-                                <th>Repetitions</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                        <span>
+                            {loadError}
+                        </span>
+                    </div>
+                )}
 
-                        <tbody>
+                {!isLoading &&
+                    !loadError &&
+                    experiments.length === 0 && (
+                        <div className="experiments-state">
+                            <strong>
+                                No experiments yet.
+                            </strong>
 
-                            {experiments.map(
-                                (experiment) => (
-                                    <tr
-                                        key={experiment.id}
-                                    >
+                            <span>
+                                Create your first benchmark experiment
+                                to see it here.
+                            </span>
+                        </div>
+                    )}
 
-                                        <td>
+                {!isLoading &&
+                    !loadError &&
+                    experiments.length > 0 && (
+                        <div className="experiments-table-wrapper">
 
-                                            <div className="experiment-name-cell">
+                            <table className="experiments-list-table">
 
-                                                <strong>
-                                                    {
-                                                        experiment.name
-                                                    }
-                                                </strong>
+                                <thead>
+                                    <tr>
+                                        <th>Experiment</th>
+                                        <th>Status</th>
+                                        <th>Architectures</th>
+                                        <th>Repetitions</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
 
-                                                <span>
-                                                    {
+                                <tbody>
+
+                                    {experiments.map(
+                                        (experiment) => {
+
+                                            const architectureCount =
+                                                Array.isArray(
+                                                    experiment.architectures
+                                                )
+                                                    ? experiment
+                                                          .architectures
+                                                          .length
+                                                    : Number(
+                                                          experiment.architectures ||
+                                                              0
+                                                      );
+
+                                            const status =
+                                                experiment.status ||
+                                                "UNKNOWN";
+
+                                            return (
+                                                <tr
+                                                    key={
                                                         experiment.id
                                                     }
-                                                </span>
-
-                                            </div>
-
-                                        </td>
-
-                                        <td>
-                                            <StatusBadge
-                                                status={
-                                                    experiment.status
-                                                }
-                                            />
-                                        </td>
-
-                                        <td>
-                                            <strong className="table-number">
-                                                {
-                                                    experiment.architectures
-                                                }
-                                            </strong>
-
-                                            <span className="table-muted">
-                                                {" "}
-                                                selected
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            {
-                                                experiment.repetitions
-                                            }
-                                        </td>
-
-                                        <td>
-                                            {
-                                                experiment.date
-                                            }
-                                        </td>
-
-                                        <td>
-
-                                            <div className="experiment-actions">
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        onOpenExperiment(
-                                                            experiment.id
-                                                        )
-                                                    }
                                                 >
-                                                    View
-                                                </button>
 
-                                                <button
-                                                    type="button"
-                                                    disabled={
-                                                        experiment.status !==
-                                                        "COMPLETED"
-                                                    }
-                                                    onClick={() =>
-                                                        onCompare(
-                                                            experiment.id
-                                                        )
-                                                    }
-                                                >
-                                                    Compare
-                                                </button>
+                                                    <td>
+                                                        <div className="experiment-name-cell">
 
-                                            </div>
+                                                            <strong>
+                                                                {
+                                                                    experiment.name
+                                                                }
+                                                            </strong>
 
-                                        </td>
+                                                            <span>
+                                                                {
+                                                                    experiment.id
+                                                                }
+                                                            </span>
 
-                                    </tr>
-                                )
-                            )}
+                                                        </div>
+                                                    </td>
 
-                        </tbody>
+                                                    <td>
+                                                        <StatusBadge
+                                                            status={
+                                                                status
+                                                            }
+                                                        />
+                                                    </td>
 
-                    </table>
+                                                    <td>
+                                                        <strong className="table-number">
+                                                            {
+                                                                architectureCount
+                                                            }
+                                                        </strong>
 
-                </div>
+                                                        <span className="table-muted">
+                                                            {" "}
+                                                            selected
+                                                        </span>
+                                                    </td>
+
+                                                    <td>
+                                                        {
+                                                            experiment.repetitions ??
+                                                            0
+                                                        }
+                                                    </td>
+
+                                                    <td>
+                                                        {formatCreatedAt(
+                                                            experiment.createdAt
+                                                        )}
+                                                    </td>
+
+                                                    <td>
+
+                                                        <div className="experiment-actions">
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    onOpenExperiment(
+                                                                        experiment.id
+                                                                    )
+                                                                }
+                                                            >
+                                                                View
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                disabled={
+                                                                    status !==
+                                                                    "COMPLETED"
+                                                                }
+                                                                onClick={() =>
+                                                                    onCompare(
+                                                                        experiment.id
+                                                                    )
+                                                                }
+                                                            >
+                                                                Compare
+                                                            </button>
+
+                                                        </div>
+
+                                                    </td>
+
+                                                </tr>
+                                            );
+                                        }
+                                    )}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+                    )}
 
             </section>
 

@@ -1,91 +1,137 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import { getExperiments } from "../services/experimentApi";
+
 import "./History.css";
 
-const experiments = [
-    {
-        id: "0debaf9f-6004-4a40-9bac-4dc43239a2ec",
-        name: "M5 Restart Persistence Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        createdAt: "31 Aug 2026, 12:01 AM",
-        duration: "12.28 sec",
-    },
-    {
-        id: "d3920e39-95f3-405c-a412-7f9fb28219d2",
-        name: "M5 Metrics Persistence Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        createdAt: "30 Aug 2026, 11:49 PM",
-        duration: "12.04 sec",
-    },
-    {
-        id: "a76e0575-818e-40d6-a6ac-2fd3f4522a98",
-        name: "M5 Run Persistence Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        createdAt: "30 Aug 2026, 11:45 PM",
-        duration: "12.31 sec",
-    },
-    {
-        id: "dea0a3f5-99be-483e-af36-ef81e52ba11c",
-        name: "M4 Final Four Architecture Test",
-        status: "COMPLETED",
-        architectures: 4,
-        repetitions: 1,
-        createdAt: "29 Aug 2026, 06:04 PM",
-        duration: "12.11 sec",
-    },
-    {
-        id: "f1a5a8d1-2c10-4e1f-8d42-7b7d0c9f4e11",
-        name: "Failure Handling Test",
-        status: "FAILED",
-        architectures: 4,
-        repetitions: 1,
-        createdAt: "29 Aug 2026, 05:40 PM",
-        duration: "3.02 sec",
-    },
-    {
-        id: "c8b32f41-6e95-47cb-b42e-6f43f7c7b191",
-        name: "Repeated Start Protection Test",
-        status: "COMPLETED",
-        architectures: 1,
-        repetitions: 1,
-        createdAt: "29 Aug 2026, 05:32 PM",
-        duration: "4.18 sec",
-    },
-];
-
 function StatusBadge({ status }) {
+    const safeStatus = status || "UNKNOWN";
+
     return (
-        <span className={`history-status status-${status.toLowerCase()}`}>
+        <span
+            className={`history-status status-${safeStatus.toLowerCase()}`}
+        >
             <span className="history-status-dot" />
-            {status}
+            {safeStatus}
         </span>
     );
 }
 
-function History({ onBack, onOpenExperiment }) {
-    const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ALL");
+function formatCreatedAt(value) {
+    if (!value) {
+        return "—";
+    }
 
-    const filteredExperiments = useMemo(() => {
-        const query = search.trim().toLowerCase();
+    const date = new Date(value);
 
-        return experiments.filter((experiment) => {
-            const matchesSearch =
-                !query ||
-                experiment.name.toLowerCase().includes(query);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
 
-            const matchesStatus =
-                statusFilter === "ALL" ||
-                experiment.status === statusFilter;
+    return date.toLocaleString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
 
-            return matchesSearch && matchesStatus;
-        });
-    }, [search, statusFilter]);
+function History({
+    onBack,
+    onOpenExperiment,
+}) {
+    const [experiments, setExperiments] =
+        useState([]);
+
+    const [search, setSearch] =
+        useState("");
+
+    const [statusFilter, setStatusFilter] =
+        useState("ALL");
+
+    const [isLoading, setIsLoading] =
+        useState(true);
+
+    const [loadError, setLoadError] =
+        useState("");
+
+    useEffect(() => {
+        let mounted = true;
+
+        async function loadExperiments() {
+            setIsLoading(true);
+            setLoadError("");
+
+            try {
+                const response =
+                    await getExperiments();
+
+                const data =
+                    Array.isArray(response)
+                        ? response
+                        : response?.experiments || [];
+
+                if (mounted) {
+                    setExperiments(data);
+                }
+            } catch (error) {
+                if (mounted) {
+                    setLoadError(
+                        error.message ||
+                            "Unable to load experiment history."
+                    );
+                }
+            } finally {
+                if (mounted) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        loadExperiments();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const filteredExperiments =
+        useMemo(() => {
+            const query =
+                search.trim().toLowerCase();
+
+            return experiments.filter(
+                (experiment) => {
+                    const matchesSearch =
+                        !query ||
+                        String(
+                            experiment.name || ""
+                        )
+                            .toLowerCase()
+                            .includes(query) ||
+                        String(
+                            experiment.id || ""
+                        )
+                            .toLowerCase()
+                            .includes(query);
+
+                    const matchesStatus =
+                        statusFilter === "ALL" ||
+                        experiment.status ===
+                            statusFilter;
+
+                    return (
+                        matchesSearch &&
+                        matchesStatus
+                    );
+                }
+            );
+        }, [
+            experiments,
+            search,
+            statusFilter,
+        ]);
 
     return (
         <div className="history-page">
@@ -97,6 +143,7 @@ function History({ onBack, onOpenExperiment }) {
             <section className="history-header">
 
                 <div>
+
                     <button
                         className="history-back-button"
                         type="button"
@@ -110,17 +157,25 @@ function History({ onBack, onOpenExperiment }) {
                         ServerBench / History
                     </div>
 
-                    <h1>Experiment History</h1>
+                    <h1>
+                        Experiment History
+                    </h1>
 
                     <p>
                         Review previously created benchmark experiments
                         and their execution status.
                     </p>
+
                 </div>
 
                 <div className="history-count">
-                    <strong>{filteredExperiments.length}</strong>
-                    <span>experiments shown</span>
+                    <strong>
+                        {filteredExperiments.length}
+                    </strong>
+
+                    <span>
+                        experiments shown
+                    </span>
                 </div>
 
             </section>
@@ -142,7 +197,9 @@ function History({ onBack, onOpenExperiment }) {
                         placeholder="Search experiments..."
                         value={search}
                         onChange={(event) =>
-                            setSearch(event.target.value)
+                            setSearch(
+                                event.target.value
+                            )
                         }
                     />
 
@@ -150,7 +207,9 @@ function History({ onBack, onOpenExperiment }) {
                         <button
                             className="clear-search"
                             type="button"
-                            onClick={() => setSearch("")}
+                            onClick={() =>
+                                setSearch("")
+                            }
                             aria-label="Clear search"
                         >
                             ×
@@ -161,7 +220,9 @@ function History({ onBack, onOpenExperiment }) {
 
                 <div className="history-filter-group">
 
-                    <span>Status</span>
+                    <span>
+                        Status
+                    </span>
 
                     <select
                         value={statusFilter}
@@ -171,18 +232,31 @@ function History({ onBack, onOpenExperiment }) {
                             )
                         }
                     >
+
                         <option value="ALL">
                             All statuses
                         </option>
+
                         <option value="COMPLETED">
                             Completed
                         </option>
+
                         <option value="RUNNING">
                             Running
                         </option>
+
+                        <option value="CREATED">
+                            Created
+                        </option>
+
                         <option value="FAILED">
                             Failed
                         </option>
+
+                        <option value="CANCELLED">
+                            Cancelled
+                        </option>
+
                     </select>
 
                 </div>
@@ -198,20 +272,63 @@ function History({ onBack, onOpenExperiment }) {
                 <div className="history-card-header">
 
                     <div>
-                        <h2>Experiments</h2>
+
+                        <h2>
+                            Experiments
+                        </h2>
 
                         <p>
                             Historical benchmark configurations and runs.
                         </p>
+
                     </div>
 
                     <span className="history-total">
-                        {filteredExperiments.length} results
+                        {filteredExperiments.length}{" "}
+                        {filteredExperiments.length ===
+                        1
+                            ? "result"
+                            : "results"}
                     </span>
 
                 </div>
 
-                {filteredExperiments.length > 0 ? (
+                {isLoading ? (
+                    <div className="history-empty">
+
+                        <h3>
+                            Loading experiment history...
+                        </h3>
+
+                        <p>
+                            Retrieving persisted experiments from ServerBench.
+                        </p>
+
+                    </div>
+                ) : loadError ? (
+                    <div className="history-empty">
+
+                        <h3>
+                            Unable to load history
+                        </h3>
+
+                        <p>
+                            {loadError}
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setLoadError("");
+                                setIsLoading(true);
+                            }}
+                        >
+                            Retry
+                        </button>
+
+                    </div>
+                ) : filteredExperiments.length >
+                  0 ? (
                     <div className="history-table-wrapper">
 
                         <table className="history-table">
@@ -219,13 +336,35 @@ function History({ onBack, onOpenExperiment }) {
                             <thead>
 
                                 <tr>
-                                    <th>Experiment</th>
-                                    <th>Status</th>
-                                    <th>Architectures</th>
-                                    <th>Repetitions</th>
-                                    <th>Created</th>
-                                    <th>Duration</th>
-                                    <th>Action</th>
+
+                                    <th>
+                                        Experiment
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Architectures
+                                    </th>
+
+                                    <th>
+                                        Repetitions
+                                    </th>
+
+                                    <th>
+                                        Created
+                                    </th>
+
+                                    <th>
+                                        Duration
+                                    </th>
+
+                                    <th>
+                                        Action
+                                    </th>
+
                                 </tr>
 
                             </thead>
@@ -233,86 +372,109 @@ function History({ onBack, onOpenExperiment }) {
                             <tbody>
 
                                 {filteredExperiments.map(
-                                    (experiment) => (
-                                        <tr
-                                            key={experiment.id}
-                                            className="history-row"
-                                        >
+                                    (experiment) => {
 
-                                            <td>
-                                                <div className="history-experiment">
+                                        const architectureCount =
+                                            Array.isArray(
+                                                experiment.architectures
+                                            )
+                                                ? experiment
+                                                      .architectures
+                                                      .length
+                                                : 0;
 
-                                                    <strong>
-                                                        {
-                                                            experiment.name
+                                        return (
+                                            <tr
+                                                key={
+                                                    experiment.id
+                                                }
+                                                className="history-row"
+                                            >
+
+                                                <td>
+
+                                                    <div className="history-experiment">
+
+                                                        <strong>
+                                                            {
+                                                                experiment.name
+                                                            }
+                                                        </strong>
+
+                                                        <span>
+                                                            {
+                                                                experiment.id
+                                                            }
+                                                        </span>
+
+                                                    </div>
+
+                                                </td>
+
+                                                <td>
+
+                                                    <StatusBadge
+                                                        status={
+                                                            experiment.status
                                                         }
-                                                    </strong>
+                                                    />
 
-                                                    <span>
+                                                </td>
+
+                                                <td>
+
+                                                    <span className="history-number">
                                                         {
-                                                            experiment.id
+                                                            architectureCount
                                                         }
                                                     </span>
 
-                                                </div>
-                                            </td>
+                                                    <span className="history-muted">
+                                                        {" "}
+                                                        selected
+                                                    </span>
 
-                                            <td>
-                                                <StatusBadge
-                                                    status={
-                                                        experiment.status
-                                                    }
-                                                />
-                                            </td>
+                                                </td>
 
-                                            <td>
-                                                <span className="history-number">
+                                                <td>
                                                     {
-                                                        experiment.architectures
+                                                        experiment.repetitions ??
+                                                        "—"
                                                     }
-                                                </span>
+                                                </td>
 
-                                                <span className="history-muted">
-                                                    {" "}
-                                                    selected
-                                                </span>
-                                            </td>
+                                                <td>
+                                                    {formatCreatedAt(
+                                                        experiment.createdAt
+                                                    )}
+                                                </td>
 
-                                            <td>
-                                                {
-                                                    experiment.repetitions
-                                                }
-                                            </td>
+                                                <td>
+                                                    —
+                                                </td>
 
-                                            <td>
-                                                {
-                                                    experiment.createdAt
-                                                }
-                                            </td>
+                                                <td>
 
-                                            <td>
-                                                {
-                                                    experiment.duration
-                                                }
-                                            </td>
+                                                    <button
+                                                        className="history-view-button"
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onOpenExperiment(
+                                                                experiment.id
+                                                            )
+                                                        }
+                                                    >
+                                                        View
+                                                        <span>
+                                                            →
+                                                        </span>
+                                                    </button>
 
-                                            <td>
-                                                <button
-                                                    className="history-view-button"
-                                                    type="button"
-                                                    onClick={() =>
-                                                        onOpenExperiment(
-                                                            experiment.id
-                                                        )
-                                                    }
-                                                >
-                                                    View
-                                                    <span>→</span>
-                                                </button>
-                                            </td>
+                                                </td>
 
-                                        </tr>
-                                    )
+                                            </tr>
+                                        );
+                                    }
                                 )}
 
                             </tbody>
@@ -340,7 +502,9 @@ function History({ onBack, onOpenExperiment }) {
                             type="button"
                             onClick={() => {
                                 setSearch("");
-                                setStatusFilter("ALL");
+                                setStatusFilter(
+                                    "ALL"
+                                );
                             }}
                         >
                             Clear filters
@@ -356,8 +520,8 @@ function History({ onBack, onOpenExperiment }) {
             ================================================== */}
 
             <div className="history-note">
-                Experiment history will be loaded from the
-                PostgreSQL-backed API during integration.
+                Experiment history is loaded from the
+                PostgreSQL-backed ServerBench API.
             </div>
 
         </div>

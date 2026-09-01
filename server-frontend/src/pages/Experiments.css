@@ -214,9 +214,7 @@
 
 .experiments-list-table th {
     padding:
-        0
-        13px
-        13px;
+        0 13px 13px;
 
     border-bottom: 1px solid #e5e7eb;
 
@@ -232,8 +230,7 @@
 
 .experiments-list-table td {
     padding:
-        16px
-        13px;
+        16px 13px;
 
     border-bottom: 1px solid #eef2f7;
 
@@ -390,8 +387,7 @@
     justify-content: center;
 
     padding:
-        0
-        10px;
+        0 10px;
 
     border: 1px solid #dbe2ea;
     border-radius: 7px;
@@ -432,9 +428,7 @@
 
     .experiments-page {
         padding:
-            24px
-            18px
-            44px;
+            24px 18px 44px;
     }
 
     .experiments-header {
@@ -464,6 +458,43 @@
 
     .experiments-count {
         align-self: flex-start;
+    }
+
+    /* ================================================================
+   DATA STATES
+================================================================ */
+
+    .experiments-state {
+        min-height: 180px;
+
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        gap: 7px;
+
+        color: #64748b;
+
+        text-align: center;
+
+        font-size: 12px;
+    }
+
+    .experiments-state strong {
+        color: #334155;
+
+        font-size: 13px;
+    }
+
+    .experiments-state span {
+        color: #94a3b8;
+
+        font-size: 11px;
+    }
+
+    .experiments-state-error strong {
+        color: #dc2626;
     }
 
 }

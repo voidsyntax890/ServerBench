@@ -1,6 +1,5 @@
 package com.serverbench.backend.service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -29,9 +28,7 @@ import com.serverbench.engine.benchmark.Experiment;
 import com.serverbench.engine.benchmark.ExperimentAnalyzer;
 import com.serverbench.engine.benchmark.ExperimentResult;
 import com.serverbench.engine.benchmark.ExperimentRunResult;
-import com.serverbench.engine.benchmark.ExperimentRunResult.Status;
 import com.serverbench.engine.benchmark.ExperimentRunner;
-import com.serverbench.engine.benchmark.ExecutionMode;
 import com.serverbench.engine.benchmark.ServerArchitecture;
 import com.serverbench.engine.benchmark.ServerFactory;
 import com.serverbench.engine.core.ServerConfig;
@@ -160,7 +157,7 @@ public class ExperimentService {
     ) {
 
         ExperimentRecord record =
-                getRuntimeRecord(
+                getOrRestoreRuntimeRecord(
                         experimentId
                 );
 
@@ -896,6 +893,108 @@ public class ExperimentService {
                                                 + experimentId
                                 )
                 );
+    }
+
+    private ExperimentRecord
+    getOrRestoreRuntimeRecord(
+            String experimentId
+    ) {
+
+        ExperimentRecord existingRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (existingRecord != null) {
+            return existingRecord;
+        }
+
+        ExperimentEntity entity =
+                getExperimentEntity(
+                        experimentId
+                );
+
+        Experiment experiment =
+                restoreExperiment(
+                        entity
+                );
+
+        ExperimentRequest request =
+                new ExperimentRequest();
+
+        request.setName(
+                entity.getName()
+        );
+
+        request.setDescription(
+                entity.getDescription()
+        );
+
+        request.setHost(
+                entity.getHost()
+        );
+
+        request.setPort(
+                entity.getPort()
+        );
+
+        request.setExecutionMode(
+                entity.getExecutionMode()
+        );
+
+        request.setTotalRequests(
+                entity.getTotalRequests()
+        );
+
+        request.setMeasurementDurationMs(
+                entity.getMeasurementDurationMs()
+        );
+
+        request.setConcurrency(
+                entity.getConcurrency()
+        );
+
+        request.setWarmupDurationMs(
+                entity.getWarmupDurationMs()
+        );
+
+        request.setRequestTimeoutMs(
+                entity.getRequestTimeoutMs()
+        );
+
+        request.setRepetitions(
+                entity.getRepetitions()
+        );
+
+        request.setThreadPoolSize(
+                entity.getThreadPoolSize()
+        );
+
+        request.setArchitectures(
+                experiment.getArchitectures()
+        );
+
+        ExperimentRecord restoredRecord =
+                new ExperimentRecord(
+                        experiment,
+                        request,
+                        entity
+                );
+
+        restoredRecord.status =
+                ExperimentStatus.valueOf(
+                        entity.getStatus()
+                );
+
+        ExperimentRecord previousRecord =
+                experiments.putIfAbsent(
+                        experimentId,
+                        restoredRecord
+                );
+
+        return previousRecord != null
+                ? previousRecord
+                : restoredRecord;
     }
 
     private ExperimentRecord getRuntimeRecord(

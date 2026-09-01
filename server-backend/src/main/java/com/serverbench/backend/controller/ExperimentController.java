@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +28,9 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/experiments")
+@CrossOrigin(
+        origins = "http://localhost:5173"
+)
 public class ExperimentController {
 
     private final ExperimentService experimentService;
@@ -101,6 +105,41 @@ public class ExperimentController {
         ExperimentHistoryResponse response =
                 new ExperimentHistoryResponse(
                         responses
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+    // ================================================================
+    // GET EXPERIMENT DETAILS
+    // ================================================================
+
+    @GetMapping("/{experimentId}/details")
+    public ResponseEntity<ExperimentResponse>
+    getExperimentDetails(
+            @PathVariable("experimentId")
+            String experimentId
+    ) {
+
+        Experiment experiment =
+                experimentService.getExperiment(
+                        experimentId
+                );
+
+        ExperimentResponse response =
+                new ExperimentResponse(
+                        experiment,
+                        experimentService
+                                .getThreadPoolSize(
+                                        experimentId
+                                ),
+                        experimentService
+                                .getStatus(
+                                        experimentId
+                                )
+                                .name()
                 );
 
         return ResponseEntity.ok(

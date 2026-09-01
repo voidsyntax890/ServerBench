@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL = "/api";
 
 async function parseResponse(response) {
     const text = await response.text();
@@ -16,6 +16,7 @@ async function parseResponse(response) {
     if (!response.ok) {
         const message =
             data?.message ||
+            data?.error ||
             `Request failed with HTTP ${response.status}.`;
 
         throw new Error(message);
@@ -24,30 +25,127 @@ async function parseResponse(response) {
     return data;
 }
 
-export async function createExperiment(payload) {
+async function request(
+    url,
+    options = {}
+) {
     const response = await fetch(
-        `${API_BASE_URL}/experiments`,
+        url,
         {
-            method: "POST",
-
+            ...options,
             headers: {
-                "Content-Type": "application/json",
+                ...(options.body
+                    ? {
+                          "Content-Type":
+                              "application/json",
+                      }
+                    : {}),
+                ...(options.headers || {}),
             },
-
-            body: JSON.stringify(payload),
         }
     );
 
     return parseResponse(response);
 }
 
-export async function getExperiment(experimentId) {
-    const response = await fetch(
+// ================================================================
+// CREATE EXPERIMENT
+// ================================================================
+
+export async function createExperiment(
+    payload
+) {
+    return request(
+        `${API_BASE_URL}/experiments`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }
+    );
+}
+
+// ================================================================
+// GET ALL EXPERIMENTS
+// ================================================================
+
+export async function getExperiments() {
+    return request(
+        `${API_BASE_URL}/experiments`,
+        {
+            method: "GET",
+        }
+    );
+}
+
+// ================================================================
+// GET ONE EXPERIMENT
+// ================================================================
+
+export async function getExperiment(
+    experimentId
+) {
+    return request(
         `${API_BASE_URL}/experiments/${experimentId}`,
         {
             method: "GET",
         }
     );
+}
 
-    return parseResponse(response);
+// ================================================================
+// START EXPERIMENT
+// ================================================================
+
+export async function startExperiment(
+    experimentId
+) {
+    return request(
+        `${API_BASE_URL}/experiments/${experimentId}/start`,
+        {
+            method: "POST",
+        }
+    );
+}
+
+// ================================================================
+// GET EXPERIMENT RESULTS
+// ================================================================
+
+export async function getExperimentResults(
+    experimentId
+) {
+    return request(
+        `${API_BASE_URL}/experiments/${experimentId}/results`,
+        {
+            method: "GET",
+        }
+    );
+}
+
+// ================================================================
+// GET EXPERIMENT COMPARISON
+// ================================================================
+
+export async function getExperimentComparison(
+    experimentId
+) {
+    return request(
+        `${API_BASE_URL}/experiments/${experimentId}/comparison`,
+        {
+            method: "GET",
+        }
+    );
+}
+
+// ================================================================
+// GET AVAILABLE ARCHITECTURES
+// ================================================================
+
+export async function getArchitectures() {
+    return request(
+        `${API_BASE_URL}/architectures`,
+        {
+            method: "GET",
+        }
+    );
 }

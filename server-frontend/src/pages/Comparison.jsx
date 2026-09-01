@@ -1,4 +1,14 @@
 import {
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
+
+import {
+    getExperimentComparison,
+} from "../services/experimentApi";
+
+import {
     Bar,
     BarChart,
     CartesianGrid,
@@ -10,63 +20,6 @@ import {
 } from "recharts";
 
 import "./Comparison.css";
-
-const experiment = {
-    id: "0debaf9f-6004-4a40-9bac-4dc43239a2ec",
-    name: "M5 Restart Persistence Test",
-    status: "COMPLETED",
-};
-
-const comparisons = [
-    {
-        architecture: "SINGLE_THREADED",
-        averageThroughput: 14028.33,
-        averageLatency: 0.0000475,
-        averageP95Latency: 0,
-        averageP99Latency: 0,
-        averageSuccessRate: 99.99,
-        averageErrorRate: 0.01,
-        successfulRuns: 1,
-        failedRuns: 0,
-        totalRuns: 1,
-    },
-    {
-        architecture: "MULTI_THREADED",
-        averageThroughput: 66336,
-        averageLatency: 0.0004975,
-        averageP95Latency: 0,
-        averageP99Latency: 0,
-        averageSuccessRate: 100,
-        averageErrorRate: 0,
-        successfulRuns: 1,
-        failedRuns: 0,
-        totalRuns: 1,
-    },
-    {
-        architecture: "THREAD_POOL",
-        averageThroughput: 63015.67,
-        averageLatency: 0.0006136,
-        averageP95Latency: 0,
-        averageP99Latency: 0,
-        averageSuccessRate: 100,
-        averageErrorRate: 0,
-        successfulRuns: 1,
-        failedRuns: 0,
-        totalRuns: 1,
-    },
-    {
-        architecture: "VIRTUAL_THREAD",
-        averageThroughput: 49547.67,
-        averageLatency: 0.00037,
-        averageP95Latency: 0,
-        averageP99Latency: 0,
-        averageSuccessRate: 100,
-        averageErrorRate: 0,
-        successfulRuns: 1,
-        failedRuns: 0,
-        totalRuns: 1,
-    },
-];
 
 const architectureNames = {
     SINGLE_THREADED: "Single Threaded",
@@ -83,17 +36,38 @@ const architectureShortNames = {
 };
 
 function formatNumber(value) {
-    return Number(value).toLocaleString(undefined, {
-        maximumFractionDigits: 2,
-    });
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return number.toLocaleString(
+        undefined,
+        {
+            maximumFractionDigits: 2,
+        }
+    );
 }
 
 function formatPercentage(value) {
-    return `${Number(value).toFixed(2)}%`;
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return `${number.toFixed(2)}%`;
 }
 
 function formatLatency(value) {
-    return `${Number(value).toFixed(4)} ms`;
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return `${number.toFixed(4)} ms`;
 }
 
 function ComparisonMetric({
@@ -112,7 +86,9 @@ function ComparisonMetric({
                 {label}
             </span>
 
-            <strong>{value}</strong>
+            <strong>
+                {value}
+            </strong>
 
             {winner && (
                 <span className="winner-label">
@@ -121,66 +97,309 @@ function ComparisonMetric({
             )}
 
             {helper && (
-                <small>{helper}</small>
+                <small>
+                    {helper}
+                </small>
             )}
         </div>
     );
 }
 
 function Comparison({
+    selectedExperimentId,
     onBack,
 }) {
-    const highestThroughput = Math.max(
-        ...comparisons.map(
-            (item) => item.averageThroughput
-        )
-    );
+    const [comparison, setComparison] =
+        useState(null);
 
-    const highestSuccessRate = Math.max(
-        ...comparisons.map(
-            (item) => item.averageSuccessRate
-        )
-    );
+    const [isLoading, setIsLoading] =
+        useState(true);
 
-    const lowestAverageLatency = Math.min(
-        ...comparisons.map(
-            (item) => item.averageLatency
-        )
-    );
+    const [loadError, setLoadError] =
+        useState("");
 
-    const lowestP95 = Math.min(
-        ...comparisons.map(
-            (item) => item.averageP95Latency
-        )
-    );
+    useEffect(() => {
+        let mounted = true;
 
-    const lowestP99 = Math.min(
-        ...comparisons.map(
-            (item) => item.averageP99Latency
-        )
-    );
+        async function loadComparison() {
+            if (!selectedExperimentId) {
+                if (mounted) {
+                    setComparison(null);
+
+                    setLoadError(
+                        "No experiment was selected."
+                    );
+
+                    setIsLoading(false);
+                }
+
+                return;
+            }
+
+            setIsLoading(true);
+            setLoadError("");
+
+            try {
+                const response =
+                    await getExperimentComparison(
+                        selectedExperimentId
+                    );
+
+                if (mounted) {
+                    setComparison(response);
+                }
+            } catch (error) {
+                if (mounted) {
+                    setComparison(null);
+
+                    setLoadError(
+                        error.message ||
+                            "Unable to load comparison data."
+                    );
+                }
+            } finally {
+                if (mounted) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        loadComparison();
+
+        return () => {
+            mounted = false;
+        };
+    }, [selectedExperimentId]);
+
+    const comparisons =
+        useMemo(() => {
+            if (
+                !Array.isArray(
+                    comparison?.comparisons
+                )
+            ) {
+                return [];
+            }
+
+            return comparison.comparisons;
+        }, [comparison]);
+
+    const highestThroughput =
+        useMemo(() => {
+            if (comparisons.length === 0) {
+                return null;
+            }
+
+            return Math.max(
+                ...comparisons.map(
+                    (item) =>
+                        Number(
+                            item.averageThroughput
+                        )
+                )
+            );
+        }, [comparisons]);
+
+    const highestSuccessRate =
+        useMemo(() => {
+            if (comparisons.length === 0) {
+                return null;
+            }
+
+            return Math.max(
+                ...comparisons.map(
+                    (item) =>
+                        Number(
+                            item.averageSuccessRate
+                        )
+                )
+            );
+        }, [comparisons]);
+
+    const lowestAverageLatency =
+        useMemo(() => {
+            if (comparisons.length === 0) {
+                return null;
+            }
+
+            return Math.min(
+                ...comparisons.map(
+                    (item) =>
+                        Number(
+                            item.averageLatency
+                        )
+                )
+            );
+        }, [comparisons]);
+
+    const lowestP95 =
+        useMemo(() => {
+            if (comparisons.length === 0) {
+                return null;
+            }
+
+            return Math.min(
+                ...comparisons.map(
+                    (item) =>
+                        Number(
+                            item.averageP95Latency
+                        )
+                )
+            );
+        }, [comparisons]);
+
+    const lowestP99 =
+        useMemo(() => {
+            if (comparisons.length === 0) {
+                return null;
+            }
+
+            return Math.min(
+                ...comparisons.map(
+                    (item) =>
+                        Number(
+                            item.averageP99Latency
+                        )
+                )
+            );
+        }, [comparisons]);
 
     const throughputChartData =
-        comparisons.map((item) => ({
-            architecture:
-                architectureShortNames[
-                    item.architecture
-                ],
-            throughput:
-                item.averageThroughput,
-        }));
+        useMemo(() => {
+            return comparisons.map(
+                (item) => ({
+                    architecture:
+                        architectureShortNames[
+                            item.architecture
+                        ] ||
+                        item.architecture,
+
+                    throughput:
+                        Number(
+                            item.averageThroughput ||
+                                0
+                        ),
+                })
+            );
+        }, [comparisons]);
 
     const reliabilityChartData =
-        comparisons.map((item) => ({
-            architecture:
-                architectureShortNames[
-                    item.architecture
-                ],
-            successRate:
-                item.averageSuccessRate,
-            errorRate:
-                item.averageErrorRate,
-        }));
+        useMemo(() => {
+            return comparisons.map(
+                (item) => ({
+                    architecture:
+                        architectureShortNames[
+                            item.architecture
+                        ] ||
+                        item.architecture,
+
+                    successRate:
+                        Number(
+                            item.averageSuccessRate ||
+                                0
+                        ),
+
+                    errorRate:
+                        Number(
+                            item.averageErrorRate ||
+                                0
+                        ),
+                })
+            );
+        }, [comparisons]);
+
+    if (isLoading) {
+        return (
+            <div className="comparison-page">
+
+                <section className="comparison-card comparison-state">
+
+                    <strong>
+                        Loading comparison...
+                    </strong>
+
+                    <span>
+                        Retrieving architecture comparison from ServerBench.
+                    </span>
+
+                </section>
+
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="comparison-page">
+
+                <section className="comparison-card comparison-state comparison-state-error">
+
+                    <strong>
+                        Unable to load comparison.
+                    </strong>
+
+                    <span>
+                        {loadError}
+                    </span>
+
+                    <button
+                        type="button"
+                        className="comparison-back-button"
+                        onClick={onBack}
+                    >
+                        <span>←</span>
+                        Back to Results
+                    </button>
+
+                </section>
+
+            </div>
+        );
+    }
+
+    if (!comparison) {
+        return (
+            <div className="comparison-page">
+
+                <section className="comparison-card comparison-state comparison-state-error">
+
+                    <strong>
+                        Comparison is not available.
+                    </strong>
+
+                    <span>
+                        No comparison data was returned for this experiment.
+                    </span>
+
+                    <button
+                        type="button"
+                        className="comparison-back-button"
+                        onClick={onBack}
+                    >
+                        <span>←</span>
+                        Back to Results
+                    </button>
+
+                </section>
+
+            </div>
+        );
+    }
+
+    const throughputWinner =
+        comparison.highestThroughputArchitecture;
+
+    const successRateWinner =
+        comparison.highestSuccessRateArchitecture;
+
+    const averageLatencyWinner =
+        comparison.lowestAverageLatencyArchitecture;
+
+    const p95Winner =
+        comparison.lowestP95LatencyArchitecture;
+
+    const p99Winner =
+        comparison.lowestP99LatencyArchitecture;
 
     return (
         <div className="comparison-page">
@@ -225,7 +444,7 @@ function Comparison({
                     </span>
 
                     <strong>
-                        {experiment.name}
+                        {comparison.experimentName}
                     </strong>
 
                 </div>
@@ -241,6 +460,7 @@ function Comparison({
                 <div className="comparison-card-header">
 
                     <div>
+
                         <h2>
                             Metric Leaders
                         </h2>
@@ -249,95 +469,101 @@ function Comparison({
                             Best-performing architecture for
                             each measured metric.
                         </p>
+
                     </div>
 
                 </div>
 
                 <div className="leaders-grid">
 
-                    {comparisons.map((item) => {
+                    {comparisons.map(
+                        (item) => {
 
-                        const isHighestThroughput =
-                            item.averageThroughput ===
-                            highestThroughput;
+                            const isHighestThroughput =
+                                item.architecture ===
+                                throughputWinner;
 
-                        const isHighestSuccessRate =
-                            item.averageSuccessRate ===
-                            highestSuccessRate;
+                            const isHighestSuccessRate =
+                                item.architecture ===
+                                successRateWinner;
 
-                        const isLowestAverageLatency =
-                            item.averageLatency ===
-                            lowestAverageLatency;
+                            const isLowestAverageLatency =
+                                item.architecture ===
+                                averageLatencyWinner;
 
-                        const isLowestP95 =
-                            item.averageP95Latency ===
-                            lowestP95;
+                            const isLowestP95 =
+                                item.architecture ===
+                                p95Winner;
 
-                        const isLowestP99 =
-                            item.averageP99Latency ===
-                            lowestP99;
+                            const isLowestP99 =
+                                item.architecture ===
+                                p99Winner;
 
-                        if (
-                            !isHighestThroughput &&
-                            !isHighestSuccessRate &&
-                            !isLowestAverageLatency &&
-                            !isLowestP95 &&
-                            !isLowestP99
-                        ) {
-                            return null;
-                        }
+                            if (
+                                !isHighestThroughput &&
+                                !isHighestSuccessRate &&
+                                !isLowestAverageLatency &&
+                                !isLowestP95 &&
+                                !isLowestP99
+                            ) {
+                                return null;
+                            }
 
-                        return (
-                            <div
-                                className="leader-summary"
-                                key={item.architecture}
-                            >
-
-                                <div className="leader-name">
-                                    {
-                                        architectureNames[
-                                            item.architecture
-                                        ]
+                            return (
+                                <div
+                                    className="leader-summary"
+                                    key={
+                                        item.architecture
                                     }
+                                >
+
+                                    <div className="leader-name">
+                                        {
+                                            architectureNames[
+                                                item.architecture
+                                            ] ||
+                                            item.architecture
+                                        }
+                                    </div>
+
+                                    <div className="leader-items">
+
+                                        {isHighestThroughput && (
+                                            <span>
+                                                Highest throughput
+                                            </span>
+                                        )}
+
+                                        {isHighestSuccessRate && (
+                                            <span>
+                                                Highest success rate
+                                            </span>
+                                        )}
+
+                                        {isLowestAverageLatency && (
+                                            <span>
+                                                Lowest average latency
+                                            </span>
+                                        )}
+
+                                        {isLowestP95 && (
+                                            <span>
+                                                Lowest P95 latency
+                                            </span>
+                                        )}
+
+                                        {isLowestP99 && (
+                                            <span>
+                                                Lowest P99 latency
+                                            </span>
+                                        )}
+
+                                    </div>
+
                                 </div>
-
-                                <div className="leader-items">
-
-                                    {isHighestThroughput && (
-                                        <span>
-                                            Highest throughput
-                                        </span>
-                                    )}
-
-                                    {isHighestSuccessRate && (
-                                        <span>
-                                            Highest success rate
-                                        </span>
-                                    )}
-
-                                    {isLowestAverageLatency && (
-                                        <span>
-                                            Lowest average latency
-                                        </span>
-                                    )}
-
-                                    {isLowestP95 && (
-                                        <span>
-                                            Lowest P95 latency
-                                        </span>
-                                    )}
-
-                                    {isLowestP99 && (
-                                        <span>
-                                            Lowest P99 latency
-                                        </span>
-                                    )}
-
-                                </div>
-
-                            </div>
-                        );
-                    })}
+                            );
+                        }
+                    )}
 
                 </div>
 
@@ -352,6 +578,7 @@ function Comparison({
                 <div className="comparison-card-header">
 
                     <div>
+
                         <h2>
                             Performance Comparison
                         </h2>
@@ -360,6 +587,7 @@ function Comparison({
                             Metric-by-metric comparison of the
                             selected architectures.
                         </p>
+
                     </div>
 
                 </div>
@@ -410,6 +638,7 @@ function Comparison({
 
                             {comparisons.map(
                                 (item) => (
+
                                     <tr
                                         key={
                                             item.architecture
@@ -421,81 +650,94 @@ function Comparison({
                                                 {
                                                     architectureNames[
                                                         item.architecture
-                                                    ]
+                                                    ] ||
+                                                    item.architecture
                                                 }
                                             </strong>
                                         </td>
 
                                         <td
                                             className={
-                                                item.averageThroughput ===
-                                                highestThroughput
+                                                item.architecture ===
+                                                throughputWinner
                                                     ? "best-cell"
                                                     : ""
                                             }
                                         >
-                                            {formatNumber(
-                                                item.averageThroughput
-                                            )}{" "}
+                                            {
+                                                formatNumber(
+                                                    item.averageThroughput
+                                                )
+                                            }{" "}
                                             req/s
                                         </td>
 
                                         <td
                                             className={
-                                                item.averageLatency ===
-                                                lowestAverageLatency
+                                                item.architecture ===
+                                                averageLatencyWinner
                                                     ? "best-cell"
                                                     : ""
                                             }
                                         >
-                                            {formatLatency(
-                                                item.averageLatency
-                                            )}
+                                            {
+                                                formatLatency(
+                                                    item.averageLatency
+                                                )
+                                            }
                                         </td>
 
                                         <td
                                             className={
-                                                item.averageP95Latency ===
-                                                lowestP95
+                                                item.architecture ===
+                                                p95Winner
                                                     ? "best-cell"
                                                     : ""
                                             }
                                         >
-                                            {formatLatency(
-                                                item.averageP95Latency
-                                            )}
+                                            {
+                                                formatLatency(
+                                                    item.averageP95Latency
+                                                )
+                                            }
                                         </td>
 
                                         <td
                                             className={
-                                                item.averageP99Latency ===
-                                                lowestP99
+                                                item.architecture ===
+                                                p99Winner
                                                     ? "best-cell"
                                                     : ""
                                             }
                                         >
-                                            {formatLatency(
-                                                item.averageP99Latency
-                                            )}
+                                            {
+                                                formatLatency(
+                                                    item.averageP99Latency
+                                                )
+                                            }
                                         </td>
 
                                         <td
                                             className={
-                                                item.averageSuccessRate ===
-                                                highestSuccessRate
+                                                item.architecture ===
+                                                successRateWinner
                                                     ? "best-cell"
                                                     : ""
                                             }
                                         >
-                                            {formatPercentage(
-                                                item.averageSuccessRate
-                                            )}
+                                            {
+                                                formatPercentage(
+                                                    item.averageSuccessRate
+                                                )
+                                            }
                                         </td>
 
                                         <td>
-                                            {formatPercentage(
-                                                item.averageErrorRate
-                                            )}
+                                            {
+                                                formatPercentage(
+                                                    item.averageErrorRate
+                                                )
+                                            }
                                         </td>
 
                                         <td>
@@ -505,6 +747,7 @@ function Comparison({
                                         </td>
 
                                     </tr>
+
                                 )
                             )}
 
@@ -525,6 +768,7 @@ function Comparison({
                 <div className="comparison-card-header">
 
                     <div>
+
                         <h2>
                             Throughput Comparison
                         </h2>
@@ -533,6 +777,7 @@ function Comparison({
                             Average requests processed per
                             second by each architecture.
                         </p>
+
                     </div>
 
                     <span className="comparison-unit">
@@ -549,7 +794,9 @@ function Comparison({
                     >
 
                         <BarChart
-                            data={throughputChartData}
+                            data={
+                                throughputChartData
+                            }
                             margin={{
                                 top: 20,
                                 right: 20,
@@ -591,14 +838,6 @@ function Comparison({
                                     )} req/s`,
                                     "Throughput",
                                 ]}
-                                contentStyle={{
-                                    border:
-                                        "1px solid #e5e7eb",
-                                    borderRadius:
-                                        "8px",
-                                    boxShadow:
-                                        "0 4px 16px rgba(15, 23, 42, 0.08)",
-                                }}
                             />
 
                             <Bar
@@ -630,14 +869,16 @@ function Comparison({
                 <div className="comparison-card-header">
 
                     <div>
+
                         <h2>
                             Reliability Comparison
                         </h2>
 
                         <p>
-                            Success and error rates across
-                            architectures.
+                            Measured success and error rates for
+                            each architecture in this experiment.
                         </p>
+
                     </div>
 
                     <span className="comparison-unit">
@@ -650,13 +891,13 @@ function Comparison({
 
                     <ResponsiveContainer
                         width="100%"
-                        height={340}
+                        height={360}
                     >
 
                         <BarChart
                             data={reliabilityChartData}
                             margin={{
-                                top: 20,
+                                top: 35,
                                 right: 20,
                                 left: 10,
                                 bottom: 20,
@@ -683,7 +924,13 @@ function Comparison({
                             <YAxis
                                 domain={[
                                     0,
-                                    100,
+                                    (dataMax) =>
+                                        Math.max(
+                                            1,
+                                            Math.ceil(
+                                                Number(dataMax) / 10
+                                            ) * 10
+                                        ),
                                 ]}
                                 tick={{
                                     fill: "#64748b",
@@ -694,19 +941,10 @@ function Comparison({
                             />
 
                             <Tooltip
-                                formatter={(value) =>
-                                    `${Number(
-                                        value
-                                    ).toFixed(2)}%`
-                                }
-                                contentStyle={{
-                                    border:
-                                        "1px solid #e5e7eb",
-                                    borderRadius:
-                                        "8px",
-                                    boxShadow:
-                                        "0 4px 16px rgba(15, 23, 42, 0.08)",
-                                }}
+                                formatter={(value, name) => [
+                                    `${Number(value).toFixed(2)}%`,
+                                    name,
+                                ]}
                             />
 
                             <Legend />
@@ -721,7 +959,13 @@ function Comparison({
                                     0,
                                     0,
                                 ]}
-                                barSize={36}
+                                barSize={32}
+                                label={{
+                                    position: "top",
+                                    formatter: (value) =>
+                                        `${Number(value).toFixed(2)}%`,
+                                    fontSize: 10,
+                                }}
                             />
 
                             <Bar
@@ -734,7 +978,15 @@ function Comparison({
                                     0,
                                     0,
                                 ]}
-                                barSize={36}
+                                barSize={32}
+                                label={{
+                                    position: "top",
+                                    formatter: (value) =>
+                                        Number(value) === 0
+                                            ? "0%"
+                                            : `${Number(value).toFixed(2)}%`,
+                                    fontSize: 10,
+                                }}
                             />
 
                         </BarChart>
@@ -743,10 +995,91 @@ function Comparison({
 
                 </div>
 
+                {/* ==================================================
+                    RELIABILITY DATA TABLE
+                ================================================== */}
+
+                <div className="reliability-data-table">
+
+                    <div className="reliability-table-header">
+                        <span>
+                            Architecture
+                        </span>
+
+                        <span>
+                            Success Rate
+                        </span>
+
+                        <span>
+                            Error Rate
+                        </span>
+
+                        <span>
+                            Successful Runs
+                        </span>
+
+                        <span>
+                            Failed Runs
+                        </span>
+                    </div>
+
+                    {comparisons.map((item) => (
+
+                        <div
+                            className="reliability-table-row"
+                            key={item.architecture}
+                        >
+
+                            <strong>
+                                {
+                                    architectureNames[
+                                        item.architecture
+                                    ] || item.architecture
+                                }
+                            </strong>
+
+                            <span>
+                                {
+                                    formatPercentage(
+                                        item.averageSuccessRate
+                                    )
+                                }
+                            </span>
+
+                            <span
+                                className={
+                                    Number(
+                                        item.averageErrorRate
+                                    ) > 0
+                                        ? "reliability-error"
+                                        : ""
+                                }
+                            >
+                                {
+                                    formatPercentage(
+                                        item.averageErrorRate
+                                    )
+                                }
+                            </span>
+
+                            <span>
+                                {item.successfulRuns}
+                            </span>
+
+                            <span>
+                                {item.failedRuns}
+                            </span>
+
+                        </div>
+
+                    ))}
+
+                </div>
+
             </section>
 
             {/* ==================================================
-                INTERPRETATION
+                METRIC SUMMARY
             ================================================== */}
 
             <section className="comparison-card">
@@ -754,6 +1087,7 @@ function Comparison({
                 <div className="comparison-card-header">
 
                     <div>
+
                         <h2>
                             Metric Summary
                         </h2>
@@ -762,6 +1096,7 @@ function Comparison({
                             A concise view of the strongest
                             measured characteristics.
                         </p>
+
                     </div>
 
                 </div>
@@ -771,48 +1106,120 @@ function Comparison({
                     <ComparisonMetric
                         label="Highest Throughput"
                         value={
-                            formatNumber(
-                                highestThroughput
-                            ) + " req/s"
+                            highestThroughput === null
+                                ? "—"
+                                : `${formatNumber(
+                                      highestThroughput
+                                  )} req/s`
                         }
-                        winner="Multi Threaded"
+                        winner={
+                            Boolean(
+                                throughputWinner
+                            )
+                        }
                         helper={
-                            "Multi Threaded"
+                            throughputWinner
+                                ? architectureNames[
+                                      throughputWinner
+                                  ] ||
+                                  throughputWinner
+                                : null
                         }
                     />
 
                     <ComparisonMetric
                         label="Highest Success Rate"
                         value={
-                            formatPercentage(
-                                highestSuccessRate
+                            highestSuccessRate === null
+                                ? "—"
+                                : formatPercentage(
+                                      highestSuccessRate
+                                  )
+                        }
+                        winner={
+                            Boolean(
+                                successRateWinner
                             )
                         }
-                        winner="Multi Threaded"
                         helper={
-                            "Multi Threaded / Thread Pool / Virtual Thread"
+                            successRateWinner
+                                ? architectureNames[
+                                      successRateWinner
+                                  ] ||
+                                  successRateWinner
+                                : null
                         }
                     />
 
                     <ComparisonMetric
                         label="Lowest Average Latency"
-                        value={formatLatency(
-                            lowestAverageLatency
-                        )}
-                        winner="Single Threaded"
+                        value={
+                            lowestAverageLatency === null
+                                ? "—"
+                                : formatLatency(
+                                      lowestAverageLatency
+                                  )
+                        }
+                        winner={
+                            Boolean(
+                                averageLatencyWinner
+                            )
+                        }
                         helper={
-                            "Single Threaded"
+                            averageLatencyWinner
+                                ? architectureNames[
+                                      averageLatencyWinner
+                                  ] ||
+                                  averageLatencyWinner
+                                : null
                         }
                     />
 
                     <ComparisonMetric
                         label="Lowest P95 Latency"
-                        value={formatLatency(
-                            lowestP95
-                        )}
-                        winner="Multiple"
+                        value={
+                            lowestP95 === null
+                                ? "—"
+                                : formatLatency(
+                                      lowestP95
+                                  )
+                        }
+                        winner={
+                            Boolean(
+                                p95Winner
+                            )
+                        }
                         helper={
-                            "All architectures returned 0 ms"
+                            p95Winner
+                                ? architectureNames[
+                                      p95Winner
+                                  ] ||
+                                  p95Winner
+                                : null
+                        }
+                    />
+
+                    <ComparisonMetric
+                        label="Lowest P99 Latency"
+                        value={
+                            lowestP99 === null
+                                ? "—"
+                                : formatLatency(
+                                      lowestP99
+                                  )
+                        }
+                        winner={
+                            Boolean(
+                                p99Winner
+                            )
+                        }
+                        helper={
+                            p99Winner
+                                ? architectureNames[
+                                      p99Winner
+                                  ] ||
+                                  p99Winner
+                                : null
                         }
                     />
 

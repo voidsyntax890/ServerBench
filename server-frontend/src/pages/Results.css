@@ -172,8 +172,7 @@
     display: grid;
 
     grid-template-columns:
-        0.75fr
-        1.25fr;
+        0.75fr 1.25fr;
 
     gap: 50px;
 
@@ -268,7 +267,7 @@
     gap: 24px;
 }
 
-.summary-stat-row > div {
+.summary-stat-row>div {
     display: flex;
     flex-direction: column;
 
@@ -279,7 +278,7 @@
     border-right: 1px solid #eef2f7;
 }
 
-.summary-stat-row > div:last-child {
+.summary-stat-row>div:last-child {
     padding-right: 0;
     border-right: 0;
 }
@@ -387,8 +386,7 @@
     gap: 12px;
 
     padding:
-        20px
-        0;
+        20px 0;
 }
 
 .result-metric-box {
@@ -477,7 +475,7 @@
     font-size: 9px;
 }
 
-.metric-section-header > strong {
+.metric-section-header>strong {
     color: #172033;
 
     font-size: 11px;
@@ -519,7 +517,7 @@
     gap: 10px;
 }
 
-.latency-grid > div {
+.latency-grid>div {
     padding: 13px;
 
     border: 1px solid #eef2f7;
@@ -558,9 +556,7 @@
     margin-right: -24px;
 
     padding:
-        20px
-        24px
-        0;
+        20px 24px 0;
 
     border-top: 1px solid #fee2e2;
 }
@@ -576,7 +572,7 @@
     padding-bottom: 24px;
 }
 
-.failure-grid > div {
+.failure-grid>div {
     padding: 12px;
 
     background: #ffffff;
@@ -669,9 +665,7 @@
 @media (max-width: 780px) {
     .results-page {
         padding:
-            24px
-            18px
-            44px;
+            24px 18px 44px;
     }
 
     .results-header {
@@ -694,7 +688,7 @@
             repeat(2, minmax(0, 1fr));
     }
 
-    .summary-stat-row > div {
+    .summary-stat-row>div {
         border-right: 0;
     }
 
@@ -710,6 +704,7 @@
 }
 
 @media (max-width: 560px) {
+
     .primary-metrics-grid,
     .summary-stat-row,
     .latency-grid,
@@ -733,5 +728,42 @@
     .run-header {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    /* ================================================================
+   DATA STATES
+================================================================ */
+
+    .results-state {
+        min-height: 260px;
+
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        gap: 8px;
+
+        text-align: center;
+
+        color: #64748b;
+    }
+
+    .results-state strong {
+        color: #334155;
+        font-size: 15px;
+    }
+
+    .results-state span {
+        color: #94a3b8;
+        font-size: 12px;
+    }
+
+    .results-state-error strong {
+        color: #dc2626;
+    }
+
+    .results-state .results-back-button {
+        margin-top: 12px;
     }
 }
