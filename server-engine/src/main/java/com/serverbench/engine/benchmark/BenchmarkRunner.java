@@ -14,21 +14,37 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 public class BenchmarkRunner {
 
     private final BenchmarkConfig config;
     private final String serverType;
+    private final Consumer<BenchmarkMetricsSnapshot> snapshotListener;
 
     public BenchmarkRunner(
             BenchmarkConfig config,
             String serverType
     ) {
+        this(
+                config,
+                serverType,
+                null
+        );
+    }
+
+    public BenchmarkRunner(
+            BenchmarkConfig config,
+            String serverType,
+            Consumer<BenchmarkMetricsSnapshot> snapshotListener
+    ) {
         this.config = config;
         this.serverType = serverType;
+        this.snapshotListener = snapshotListener;
     }
 
     public BenchmarkResult run() {
@@ -106,6 +122,39 @@ public class BenchmarkRunner {
         AtomicInteger requestCounter =
                 new AtomicInteger(0);
 
+        ScheduledExecutorService snapshotExecutor =
+                null;
+
+        // ============================================================
+        // LIVE SNAPSHOT REPORTER
+        // ============================================================
+
+        if (snapshotListener != null) {
+
+            snapshotExecutor =
+                    Executors.newSingleThreadScheduledExecutor();
+
+            ScheduledExecutorService finalSnapshotExecutor =
+                    snapshotExecutor;
+
+            finalSnapshotExecutor.scheduleAtFixedRate(
+                    () -> publishSnapshot(
+                            measurementStartTime,
+                            attemptedRequests,
+                            successfulRequests,
+                            failedRequests,
+                            totalLatencyMs
+                    ),
+                    0L,
+                    500L,
+                    TimeUnit.MILLISECONDS
+            );
+        }
+
+        // ============================================================
+        // WORKER EXECUTOR
+        // ============================================================
+
         ExecutorService executor =
                 Executors.newFixedThreadPool(
                         config.getConcurrency()
@@ -181,7 +230,7 @@ public class BenchmarkRunner {
                 executor.shutdownNow();
 
                 executor.awaitTermination(
-                        5000,
+                        5000L,
                         TimeUnit.MILLISECONDS
                 );
             }
@@ -191,6 +240,15 @@ public class BenchmarkRunner {
             executor.shutdownNow();
 
             Thread.currentThread().interrupt();
+        }
+
+        // ============================================================
+        // STOP LIVE SNAPSHOT REPORTER
+        // ============================================================
+
+        if (snapshotExecutor != null) {
+
+            snapshotExecutor.shutdownNow();
         }
 
         // ============================================================
@@ -272,6 +330,22 @@ public class BenchmarkRunner {
                         / attempted
                         * 100.0;
 
+        // ============================================================
+        // FINAL SNAPSHOT
+        // ============================================================
+
+        publishSnapshot(
+                measurementStartTime,
+                attemptedRequests,
+                successfulRequests,
+                failedRequests,
+                totalLatencyMs
+        );
+
+        // ============================================================
+        // PERCENTILES
+        // ============================================================
+
         List<Long> sortedLatencies;
 
         synchronized (latencies) {
@@ -300,6 +374,10 @@ public class BenchmarkRunner {
                         99
                 );
 
+        // ============================================================
+        // FINAL RESULT
+        // ============================================================
+
         return new BenchmarkResult(
                 serverType,
                 attempted,
@@ -322,6 +400,75 @@ public class BenchmarkRunner {
                 noResponseFailures.get(),
                 otherIoFailures.get()
         );
+    }
+
+    // ================================================================
+    // LIVE METRICS SNAPSHOT
+    // ================================================================
+
+    private void publishSnapshot(
+            long measurementStartTime,
+            AtomicInteger attemptedRequests,
+            AtomicInteger successfulRequests,
+            AtomicInteger failedRequests,
+            AtomicLong totalLatencyMs
+    ) {
+
+        if (snapshotListener == null) {
+            return;
+        }
+
+        long elapsedTimeMs =
+                TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime()
+                                - measurementStartTime
+                );
+
+        int attempted =
+                attemptedRequests.get();
+
+        int successful =
+                successfulRequests.get();
+
+        int failed =
+                failedRequests.get();
+
+        double throughput =
+                elapsedTimeMs <= 0
+                        ? 0.0
+                        : successful
+                        / (elapsedTimeMs / 1000.0);
+
+        double averageLatency =
+                successful == 0
+                        ? 0.0
+                        : (double) totalLatencyMs.get()
+                        / successful;
+
+        BenchmarkMetricsSnapshot snapshot =
+                new BenchmarkMetricsSnapshot(
+                        serverType,
+                        attempted,
+                        successful,
+                        failed,
+                        throughput,
+                        averageLatency,
+                        elapsedTimeMs
+                );
+
+        try {
+
+            snapshotListener.accept(
+                    snapshot
+            );
+
+        } catch (RuntimeException ignored) {
+
+            /*
+             * Live reporting must never affect
+             * benchmark execution.
+             */
+        }
     }
 
     // ================================================================
@@ -575,6 +722,7 @@ public class BenchmarkRunner {
             }
 
         } catch (IOException ignored) {
+
             /*
              * Socket cleanup errors after the worker has finished
              * are not counted as benchmark request failures.

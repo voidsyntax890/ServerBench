@@ -45,7 +45,6 @@ public class ExperimentRunner {
                     Supplier<ServerEngine>
                     > serverFactories
     ) {
-
         this(
                 experiment,
                 serverFactories,
@@ -59,8 +58,7 @@ public class ExperimentRunner {
                     ServerArchitecture,
                     Supplier<ServerEngine>
                     > serverFactories,
-            Consumer<ExperimentProgress>
-                    progressListener
+            Consumer<ExperimentProgress> progressListener
     ) {
 
         if (experiment == null) {
@@ -82,14 +80,9 @@ public class ExperimentRunner {
                 serverFactories
         );
 
-        this.experiment =
-                experiment;
-
-        this.serverFactories =
-                serverFactories;
-
-        this.progressListener =
-                progressListener;
+        this.experiment = experiment;
+        this.serverFactories = serverFactories;
+        this.progressListener = progressListener;
     }
 
     public ExperimentResult run() {
@@ -106,10 +99,15 @@ public class ExperimentRunner {
 
         int completedRuns = 0;
 
-        for (
-                ServerArchitecture architecture :
-                experiment.getArchitectures()
-        ) {
+        /*
+         * Execute architectures sequentially.
+         *
+         * This keeps the current local comparison model
+         * isolated: one architecture finishes before the
+         * next architecture starts.
+         */
+        for (ServerArchitecture architecture :
+                experiment.getArchitectures()) {
 
             for (
                     int repetition = 1;
@@ -119,7 +117,7 @@ public class ExperimentRunner {
 
                 notifyProgress(
                         new ExperimentProgress(
-                                architecture,
+                                architecture.name(),
                                 repetition,
                                 completedRuns,
                                 totalRuns
@@ -140,7 +138,7 @@ public class ExperimentRunner {
 
                 notifyProgress(
                         new ExperimentProgress(
-                                architecture,
+                                architecture.name(),
                                 repetition,
                                 completedRuns,
                                 totalRuns
@@ -150,26 +148,6 @@ public class ExperimentRunner {
         }
 
         return experimentResult;
-    }
-
-    private void notifyProgress(
-            ExperimentProgress progress
-    ) {
-
-        if (progressListener == null) {
-            return;
-        }
-
-        try {
-            progressListener.accept(
-                    progress
-            );
-        } catch (RuntimeException ignored) {
-            /*
-             * Progress reporting must never
-             * affect benchmark execution.
-             */
-        }
     }
 
     private ExperimentRunResult executeSingleRun(
@@ -224,6 +202,7 @@ public class ExperimentRunner {
                                             .set(throwable);
                                 }
                             },
+
                             "ServerBench-"
                                     + architecture
                                     + "-Run-"
@@ -236,10 +215,29 @@ public class ExperimentRunner {
                     startupFailure
             );
 
+            /*
+             * Forward live benchmark snapshots without
+             * coupling the engine to Spring Boot.
+             */
+            Consumer<BenchmarkMetricsSnapshot>
+                    snapshotForwarder =
+                    snapshot -> {
+
+                        notifyProgress(
+                                new ExperimentProgress(
+                                        architecture.name(),
+                                        repetitionNumber,
+                                        snapshot
+                                )
+                        );
+                    };
+
             BenchmarkRunner benchmarkRunner =
                     new BenchmarkRunner(
-                            experiment.getBenchmarkConfig(),
-                            server.getServerType()
+                            experiment
+                                    .getBenchmarkConfig(),
+                            server.getServerType(),
+                            snapshotForwarder
                     );
 
             BenchmarkResult benchmarkResult =
@@ -282,6 +280,7 @@ public class ExperimentRunner {
                     server.stop();
 
                 } catch (Exception ignored) {
+
                     /*
                      * We still try to join the server thread.
                      * Cleanup problems are not allowed to prevent
@@ -303,6 +302,29 @@ public class ExperimentRunner {
                     Thread.currentThread().interrupt();
                 }
             }
+        }
+    }
+
+    private void notifyProgress(
+            ExperimentProgress progress
+    ) {
+
+        if (progressListener == null) {
+            return;
+        }
+
+        try {
+
+            progressListener.accept(
+                    progress
+            );
+
+        } catch (RuntimeException ignored) {
+
+            /*
+             * Progress reporting must never affect
+             * benchmark execution.
+             */
         }
     }
 

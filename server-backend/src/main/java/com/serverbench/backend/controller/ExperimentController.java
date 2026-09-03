@@ -3,6 +3,7 @@ package com.serverbench.backend.controller;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.serverbench.backend.dto.request.ExperimentRequest;
 import com.serverbench.backend.dto.response.ComparisonResponse;
@@ -218,12 +220,35 @@ public class ExperimentController {
                         experimentService
                                 .getProgress(
                                         experimentId
+                                ),
+                        experimentService
+                                .getLiveMetrics(
+                                        experimentId
                                 )
                 );
 
         return ResponseEntity.ok(
                 response
         );
+    }
+
+    // ================================================================
+    // LIVE EXPERIMENT UPDATES - SSE
+    // ================================================================
+
+    @GetMapping(
+            value = "/{experimentId}/live",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public SseEmitter getLiveExperimentUpdates(
+            @PathVariable("experimentId")
+            String experimentId
+    ) {
+
+        return experimentService
+                .subscribeLiveUpdates(
+                        experimentId
+                );
     }
 
     // ================================================================

@@ -8,6 +8,7 @@ import {
     getExperiments,
     startExperiment,
     getExperiment,
+    subscribeToExperimentLiveUpdates,
 } from "../services/experimentApi";
 
 import "./ExperimentDetails.css";
@@ -117,6 +118,50 @@ function formatDateTime(value) {
     );
 }
 
+/*
+ * ------------------------------------------------------------
+ * Live metric formatting helpers
+ * ------------------------------------------------------------
+ */
+
+function formatMetricNumber(value) {
+    if (value == null || Number.isNaN(Number(value))) {
+        return "—";
+    }
+
+    return Number(value).toLocaleString();
+}
+
+function formatThroughput(value) {
+    if (value == null || Number.isNaN(Number(value))) {
+        return "—";
+    }
+
+    return `${Number(value).toFixed(2)} req/s`;
+}
+
+function formatLatency(value) {
+    if (value == null || Number.isNaN(Number(value))) {
+        return "—";
+    }
+
+    return `${Number(value).toFixed(4)} ms`;
+}
+
+function formatElapsedTime(value) {
+    if (value == null || Number.isNaN(Number(value))) {
+        return "—";
+    }
+
+    const milliseconds = Number(value);
+
+    if (milliseconds < 1000) {
+        return `${milliseconds} ms`;
+    }
+
+    return `${(milliseconds / 1000).toFixed(2)} s`;
+}
+
 function ExperimentDetails({
     experimentId,
     onBack,
@@ -215,83 +260,152 @@ function ExperimentDetails({
 
         let mounted = true;
 
-        let intervalId = null;
-
-        async function loadStatus() {
+        /*
+         * Load the authoritative state once immediately.
+         *
+         * SSE then becomes responsible for live changes.
+         */
+        async function loadInitialStatus() {
             try {
                 const response =
                     await getExperiment(
                         experimentId
                     );
 
-                if (!mounted) {
-                    return;
+                if (mounted) {
+                    setExperimentStatus(
+                        response
+                    );
                 }
-
-                setExperimentStatus(
-                    response
-                );
-
-                const status =
-                    response?.status;
-
-                /*
-                 * Stop polling only when the experiment
-                 * has reached a terminal state.
-                 *
-                 * IMPORTANT:
-                 * CREATED must NOT stop polling because the
-                 * user can start the experiment later while
-                 * remaining on this page.
-                 */
-                if (
-                    TERMINAL_STATUSES.includes(
-                        status
-                    )
-                ) {
-                    if (intervalId) {
-                        clearInterval(
-                            intervalId
-                        );
-
-                        intervalId = null;
-                    }
-                }
-
             } catch {
                 /*
-                 * Keep polling.
-                 * A temporary request failure should not
-                 * permanently disable live updates.
+                 * The existing page already has its
+                 * normal error/loading behavior.
                  */
             }
         }
 
-        /*
-         * Load immediately.
-         */
-        loadStatus();
+        loadInitialStatus();
 
         /*
-         * Keep polling while the page is open.
-         * This allows CREATED -> RUNNING to be
-         * detected even when the user stays on
-         * the Details page.
+         * Open one persistent SSE connection.
          */
-        intervalId = setInterval(
-            loadStatus,
-            300
-        );
+        const eventSource =
+            subscribeToExperimentLiveUpdates(
+                experimentId,
+                {
+                    onProgress: (progress) => {
+
+                        if (!mounted) {
+                            return;
+                        }
+
+                        setExperimentStatus(
+                            (current) => ({
+                                ...current,
+                                status:
+                                    "RUNNING",
+
+                                currentArchitecture:
+                                    progress.currentArchitecture,
+
+                                currentRepetition:
+                                    progress.currentRepetition,
+
+                                completedRuns:
+                                    progress.completedRuns,
+
+                                totalRuns:
+                                    progress.totalRuns,
+
+                                progressPercentage:
+                                    progress.progressPercentage,
+                            })
+                        );
+                    },
+
+                    onMetrics: (metrics) => {
+
+                        if (!mounted) {
+                            return;
+                        }
+
+                        setExperimentStatus(
+                            (current) => ({
+                                ...current,
+
+                                currentAttemptedRequests:
+                                    metrics.attemptedRequests,
+
+                                currentSuccessfulRequests:
+                                    metrics.successfulRequests,
+
+                                currentFailedRequests:
+                                    metrics.failedRequests,
+
+                                currentThroughputRequestsPerSecond:
+                                    metrics.throughputRequestsPerSecond,
+
+                                currentAverageLatencyMs:
+                                    metrics.averageLatencyMs,
+
+                                currentElapsedTimeMs:
+                                    metrics.elapsedTimeMs,
+                            })
+                        );
+                    },
+
+                    onStatus: async (
+                        nextStatus
+                    ) => {
+
+                        if (!mounted) {
+                            return;
+                        }
+
+                        /*
+                         * Get the authoritative final state
+                         * whenever lifecycle status changes.
+                         */
+                        try {
+
+                            const response =
+                                await getExperiment(
+                                    experimentId
+                                );
+
+                            if (mounted) {
+                                setExperimentStatus(
+                                    response
+                                );
+                            }
+
+                        } catch {
+                            /*
+                             * SSE remains open and can reconnect.
+                             */
+                        }
+
+                        if (
+                            nextStatus ===
+                                "COMPLETED" ||
+                            nextStatus ===
+                                "FAILED" ||
+                            nextStatus ===
+                                "CANCELLED"
+                        ) {
+
+                            eventSource.close();
+                        }
+                    },
+                }
+            );
 
         return () => {
             mounted = false;
-
-            if (intervalId) {
-                clearInterval(
-                    intervalId
-                );
-            }
+            eventSource.close();
         };
+
     }, [experimentId]);
 
     /*
@@ -351,9 +465,7 @@ function ExperimentDetails({
     if (isLoading) {
         return (
             <div className="details-page">
-
                 <div className="details-state">
-
                     <strong>
                         Loading experiment...
                     </strong>
@@ -361,9 +473,7 @@ function ExperimentDetails({
                     <span>
                         Retrieving experiment data from ServerBench.
                     </span>
-
                 </div>
-
             </div>
         );
     }
@@ -377,9 +487,7 @@ function ExperimentDetails({
     if (loadError) {
         return (
             <div className="details-page">
-
                 <section className="details-card details-state details-state-error">
-
                     <strong>
                         Unable to load experiment.
                     </strong>
@@ -395,9 +503,7 @@ function ExperimentDetails({
                     >
                         Back to Experiments
                     </button>
-
                 </section>
-
             </div>
         );
     }
@@ -405,9 +511,7 @@ function ExperimentDetails({
     if (!experiment) {
         return (
             <div className="details-page">
-
                 <section className="details-card details-state details-state-error">
-
                     <strong>
                         Experiment not found.
                     </strong>
@@ -423,9 +527,7 @@ function ExperimentDetails({
                     >
                         Back to Experiments
                     </button>
-
                 </section>
-
             </div>
         );
     }
@@ -479,6 +581,36 @@ function ExperimentDetails({
     const currentRepetition =
         experimentStatus?.currentRepetition ??
         0;
+
+    /*
+     * ------------------------------------------------------------
+     * Live benchmark metrics
+     * ------------------------------------------------------------
+     */
+
+    const currentAttemptedRequests =
+        experimentStatus?.currentAttemptedRequests ??
+        null;
+
+    const currentSuccessfulRequests =
+        experimentStatus?.currentSuccessfulRequests ??
+        null;
+
+    const currentFailedRequests =
+        experimentStatus?.currentFailedRequests ??
+        null;
+
+    const currentThroughputRequestsPerSecond =
+        experimentStatus?.currentThroughputRequestsPerSecond ??
+        null;
+
+    const currentAverageLatencyMs =
+        experimentStatus?.currentAverageLatencyMs ??
+        null;
+
+    const currentElapsedTimeMs =
+        experimentStatus?.currentElapsedTimeMs ??
+        null;
 
     return (
         <div className="details-page">
@@ -935,7 +1067,7 @@ function ExperimentDetails({
                             </h2>
 
                             <p>
-                                Current benchmark execution status.
+                                Current benchmark execution status and metrics.
                             </p>
 
                         </div>
@@ -997,6 +1129,10 @@ function ExperimentDetails({
 
                     </div>
 
+                    {/* ------------------------------------------------
+                        Current execution information
+                    ------------------------------------------------- */}
+
                     <div className="live-progress-details">
 
                         <div className="execution-stat">
@@ -1056,6 +1192,98 @@ function ExperimentDetails({
                                           totalRuns -
                                               completedRuns
                                       )}
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                    {/* ------------------------------------------------
+                        Live benchmark metrics
+                    ------------------------------------------------- */}
+
+                    <div className="live-progress-metrics">
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Requests
+                            </span>
+
+                            <strong>
+                                {formatMetricNumber(
+                                    currentAttemptedRequests
+                                )}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat primary">
+
+                            <span>
+                                Successful
+                            </span>
+
+                            <strong>
+                                {formatMetricNumber(
+                                    currentSuccessfulRequests
+                                )}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Failed
+                            </span>
+
+                            <strong>
+                                {formatMetricNumber(
+                                    currentFailedRequests
+                                )}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Throughput
+                            </span>
+
+                            <strong>
+                                {formatThroughput(
+                                    currentThroughputRequestsPerSecond
+                                )}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Average Latency
+                            </span>
+
+                            <strong>
+                                {formatLatency(
+                                    currentAverageLatencyMs
+                                )}
+                            </strong>
+
+                        </div>
+
+                        <div className="execution-stat">
+
+                            <span>
+                                Elapsed Time
+                            </span>
+
+                            <strong>
+                                {formatElapsedTime(
+                                    currentElapsedTimeMs
+                                )}
                             </strong>
 
                         </div>

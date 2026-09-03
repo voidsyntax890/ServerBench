@@ -1,15 +1,18 @@
 package com.serverbench.backend.service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.serverbench.backend.dto.request.ExperimentRequest;
 import com.serverbench.backend.entity.BenchmarkMetricsEntity;
@@ -21,6 +24,7 @@ import com.serverbench.backend.repository.BenchmarkRunRepository;
 import com.serverbench.backend.repository.ExperimentArchitectureRepository;
 import com.serverbench.backend.repository.ExperimentRepository;
 import com.serverbench.engine.benchmark.BenchmarkConfig;
+import com.serverbench.engine.benchmark.BenchmarkMetricsSnapshot;
 import com.serverbench.engine.benchmark.BenchmarkResult;
 import com.serverbench.engine.benchmark.ComparisonSummary;
 import com.serverbench.engine.benchmark.EnvironmentMetadata;
@@ -61,6 +65,9 @@ public class ExperimentService {
      */
     private final Map<String, ExperimentRecord> experiments
             = new ConcurrentHashMap<>();
+
+    private final Map<String, CopyOnWriteArrayList<SseEmitter>>
+            liveEmitters = new ConcurrentHashMap<>();
 
     public ExperimentService(
             ExperimentRepository experimentRepository,
@@ -367,6 +374,188 @@ public class ExperimentService {
     }
 
     // ================================================================
+    // GET LIVE METRICS
+    // ================================================================
+
+    public BenchmarkMetricsSnapshot getLiveMetrics(
+            String experimentId
+    ) {
+
+        ExperimentRecord runtimeRecord =
+                experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord == null) {
+            return null;
+        }
+
+        return runtimeRecord.liveMetrics;
+    }
+
+    // ================================================================
+    // LIVE SSE UPDATES
+    // ================================================================
+
+    public SseEmitter subscribeLiveUpdates(
+            String experimentId
+    ) {
+
+        ExperimentRecord record =
+                getOrRestoreRuntimeRecord(
+                        experimentId
+                );
+
+        SseEmitter emitter =
+                new SseEmitter(0L);
+
+        liveEmitters
+                .computeIfAbsent(
+                        experimentId,
+                        ignored ->
+                                new CopyOnWriteArrayList<>()
+                )
+                .add(emitter);
+
+        emitter.onCompletion(
+                () -> removeEmitter(
+                        experimentId,
+                        emitter
+                )
+        );
+
+        emitter.onTimeout(
+                () -> removeEmitter(
+                        experimentId,
+                        emitter
+                )
+        );
+
+        emitter.onError(
+                ignored ->
+                        removeEmitter(
+                                experimentId,
+                                emitter
+                        )
+        );
+
+        /*
+         * Send the current state immediately.
+         *
+         * This is important when the browser opens the Details page
+         * while the experiment is already running.
+         */
+        try {
+
+            if (record.progress != null) {
+                emitter.send(
+                        SseEmitter.event()
+                                .name("progress")
+                                .data(record.progress)
+                );
+            }
+
+            if (record.liveMetrics != null) {
+                emitter.send(
+                        SseEmitter.event()
+                                .name("metrics")
+                                .data(record.liveMetrics)
+                );
+            }
+
+            emitter.send(
+                    SseEmitter.event()
+                            .name("status")
+                            .data(record.status.name())
+            );
+
+        } catch (IOException exception) {
+
+            removeEmitter(
+                    experimentId,
+                    emitter
+            );
+
+            emitter.completeWithError(
+                    exception
+            );
+        }
+
+        return emitter;
+    }
+
+    private void removeEmitter(
+            String experimentId,
+            SseEmitter emitter
+    ) {
+
+        CopyOnWriteArrayList<SseEmitter> emitters =
+                liveEmitters.get(
+                        experimentId
+                );
+
+        if (emitters == null) {
+            return;
+        }
+
+        emitters.remove(emitter);
+
+        if (emitters.isEmpty()) {
+            liveEmitters.remove(
+                    experimentId,
+                    emitters
+            );
+        }
+    }
+
+    private void publishLiveEvent(
+            String experimentId,
+            String eventName,
+            Object data
+    ) {
+
+        CopyOnWriteArrayList<SseEmitter> emitters =
+                liveEmitters.get(
+                        experimentId
+                );
+
+        if (emitters == null || emitters.isEmpty()) {
+            return;
+        }
+
+        for (SseEmitter emitter : emitters) {
+
+            try {
+
+                emitter.send(
+                        SseEmitter.event()
+                                .name(eventName)
+                                .data(data)
+                );
+
+            } catch (IOException exception) {
+
+                removeEmitter(
+                        experimentId,
+                        emitter
+                );
+            }
+        }
+    }
+
+    private void publishLiveStatus(
+            String experimentId,
+            ExperimentStatus status
+    ) {
+
+        publishLiveEvent(
+                experimentId,
+                "status",
+                status.name()
+        );
+    }
+
+    // ================================================================
     // GET COMPARISON
     // ================================================================
 
@@ -409,13 +598,13 @@ public class ExperimentService {
                 ).reversed()
         );
 
-        List<Experiment> experiments =
+        List<Experiment> experimentList =
                 new ArrayList<>();
 
         for (ExperimentEntity entity :
                 entities) {
 
-            experiments.add(
+            experimentList.add(
                     restoreExperiment(
                             entity
                     )
@@ -423,7 +612,7 @@ public class ExperimentService {
         }
 
         return List.copyOf(
-                experiments
+                experimentList
         );
     }
 
@@ -596,9 +785,31 @@ public class ExperimentService {
                         new ExperimentRunner(
                                 experiment,
                                 serverFactories,
-                                progress ->
+                                progress -> {
+
+                                    if (progress.hasMetricsSnapshot()) {
+
+                                        record.liveMetrics =
+                                                progress.getMetricsSnapshot();
+
+                                        publishLiveEvent(
+                                                record.experiment.getId(),
+                                                "metrics",
+                                                progress.getMetricsSnapshot()
+                                        );
+
+                                    } else {
+
                                         record.progress =
+                                                progress;
+
+                                        publishLiveEvent(
+                                                record.experiment.getId(),
+                                                "progress",
                                                 progress
+                                        );
+                                    }
+                                }
                         );
 
                 benchmarkSpan.addEvent(
@@ -719,6 +930,11 @@ public class ExperimentService {
                 );
             }
 
+            publishLiveStatus(
+                    experiment.getId(),
+                    ExperimentStatus.COMPLETED
+            );
+
             experimentSpan.addEvent(
                     "serverbench.experiment.completed"
             );
@@ -761,6 +977,11 @@ public class ExperimentService {
                         record.experimentEntity
                 );
             }
+
+            publishLiveStatus(
+                    record.experiment.getId(),
+                    ExperimentStatus.FAILED
+            );
 
         } finally {
 
@@ -1335,6 +1556,7 @@ public class ExperimentService {
                 : restoredRecord;
     }
 
+    @SuppressWarnings("unused")
     private ExperimentRecord getRuntimeRecord(
             String experimentId
     ) {
@@ -1411,6 +1633,9 @@ public class ExperimentService {
         private volatile ExperimentProgress
                 progress;
 
+        private volatile BenchmarkMetricsSnapshot liveMetrics;
+
+        @SuppressWarnings("unused")
         private volatile CompletableFuture<Void>
                 executionFuture;
 
@@ -1436,6 +1661,7 @@ public class ExperimentService {
                     "";
 
             this.progress = null;
+            this.liveMetrics = null;
         }
     }
 }

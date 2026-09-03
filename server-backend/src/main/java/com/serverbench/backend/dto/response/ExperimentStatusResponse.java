@@ -1,7 +1,9 @@
 package com.serverbench.backend.dto.response;
 
 import com.serverbench.backend.service.ExperimentService;
+import com.serverbench.engine.benchmark.BenchmarkMetricsSnapshot;
 import com.serverbench.engine.benchmark.Experiment;
+import com.serverbench.engine.benchmark.ExperimentProgress;
 import com.serverbench.engine.benchmark.ExperimentResult;
 
 public class ExperimentStatusResponse {
@@ -22,12 +24,54 @@ public class ExperimentStatusResponse {
 
     private final String errorMessage;
 
+    // ================================================================
+    // LIVE BENCHMARK METRICS
+    // ================================================================
+
+    private final int currentAttemptedRequests;
+    private final int currentSuccessfulRequests;
+    private final int currentFailedRequests;
+
+    private final double currentThroughputRequestsPerSecond;
+    private final double currentAverageLatencyMs;
+
+    private final long currentElapsedTimeMs;
+
+    /*
+     * Backward-compatible constructor.
+     *
+     * Existing callers can continue using the M7.1 constructor.
+     * Live metrics will simply be empty until the new constructor
+     * is used.
+     */
     public ExperimentStatusResponse(
             Experiment experiment,
             ExperimentService.ExperimentStatus status,
             ExperimentResult result,
             String errorMessage,
-            com.serverbench.engine.benchmark.ExperimentProgress progress
+            ExperimentProgress progress
+    ) {
+
+        this(
+                experiment,
+                status,
+                result,
+                errorMessage,
+                progress,
+                null
+        );
+    }
+
+    /*
+     * M7.3 constructor.
+     */
+    public ExperimentStatusResponse(
+            Experiment experiment,
+            ExperimentService.ExperimentStatus status,
+            ExperimentResult result,
+            String errorMessage,
+            ExperimentProgress progress,
+            BenchmarkMetricsSnapshot liveMetrics
     ) {
 
         this.id =
@@ -38,6 +82,10 @@ public class ExperimentStatusResponse {
 
         this.status =
                 status.name();
+
+        // ============================================================
+        // EXPERIMENT RUN COUNTS
+        // ============================================================
 
         if (result != null) {
 
@@ -74,15 +122,17 @@ public class ExperimentStatusResponse {
                     0;
         }
 
+        // ============================================================
+        // EXPERIMENT PROGRESS
+        // ============================================================
+
         if (progress != null) {
 
             this.completedRuns =
                     progress.getCompletedRuns();
 
             this.currentArchitecture =
-                    progress
-                            .getCurrentArchitecture()
-                            .name();
+                    progress.getCurrentArchitecture();
 
             this.currentRepetition =
                     progress.getCurrentRepetition();
@@ -119,11 +169,62 @@ public class ExperimentStatusResponse {
                     0.0;
         }
 
+        // ============================================================
+        // LIVE BENCHMARK METRICS
+        // ============================================================
+
+        if (liveMetrics != null) {
+
+            this.currentAttemptedRequests =
+                    liveMetrics.getAttemptedRequests();
+
+            this.currentSuccessfulRequests =
+                    liveMetrics.getSuccessfulRequests();
+
+            this.currentFailedRequests =
+                    liveMetrics.getFailedRequests();
+
+            this.currentThroughputRequestsPerSecond =
+                    liveMetrics
+                            .getThroughputRequestsPerSecond();
+
+            this.currentAverageLatencyMs =
+                    liveMetrics
+                            .getAverageLatencyMs();
+
+            this.currentElapsedTimeMs =
+                    liveMetrics.getElapsedTimeMs();
+
+        } else {
+
+            this.currentAttemptedRequests =
+                    0;
+
+            this.currentSuccessfulRequests =
+                    0;
+
+            this.currentFailedRequests =
+                    0;
+
+            this.currentThroughputRequestsPerSecond =
+                    0.0;
+
+            this.currentAverageLatencyMs =
+                    0.0;
+
+            this.currentElapsedTimeMs =
+                    0L;
+        }
+
         this.errorMessage =
                 errorMessage == null
                         ? ""
                         : errorMessage;
     }
+
+    // ================================================================
+    // GETTERS
+    // ================================================================
 
     public String getId() {
         return id;
@@ -167,5 +268,33 @@ public class ExperimentStatusResponse {
 
     public String getErrorMessage() {
         return errorMessage;
+    }
+
+    // ================================================================
+    // LIVE METRIC GETTERS
+    // ================================================================
+
+    public int getCurrentAttemptedRequests() {
+        return currentAttemptedRequests;
+    }
+
+    public int getCurrentSuccessfulRequests() {
+        return currentSuccessfulRequests;
+    }
+
+    public int getCurrentFailedRequests() {
+        return currentFailedRequests;
+    }
+
+    public double getCurrentThroughputRequestsPerSecond() {
+        return currentThroughputRequestsPerSecond;
+    }
+
+    public double getCurrentAverageLatencyMs() {
+        return currentAverageLatencyMs;
+    }
+
+    public long getCurrentElapsedTimeMs() {
+        return currentElapsedTimeMs;
     }
 }

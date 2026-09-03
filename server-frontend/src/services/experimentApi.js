@@ -149,3 +149,82 @@ export async function getArchitectures() {
         }
     );
 }
+
+// ================================================================
+// LIVE EXPERIMENT UPDATES - SSE
+// ================================================================
+
+export function subscribeToExperimentLiveUpdates(
+    experimentId,
+    {
+        onProgress,
+        onMetrics,
+        onStatus,
+        onError,
+    } = {}
+) {
+
+    const eventSource =
+        new EventSource(
+            `${API_BASE_URL}/experiments/${experimentId}/live`
+        );
+
+    eventSource.addEventListener(
+        "progress",
+        (event) => {
+
+            try {
+
+                const data =
+                    JSON.parse(event.data);
+
+                if (onProgress) {
+                    onProgress(data);
+                }
+
+            } catch {
+                // Ignore malformed progress events.
+            }
+        }
+    );
+
+    eventSource.addEventListener(
+        "metrics",
+        (event) => {
+
+            try {
+
+                const data =
+                    JSON.parse(event.data);
+
+                if (onMetrics) {
+                    onMetrics(data);
+                }
+
+            } catch {
+                // Ignore malformed metrics events.
+            }
+        }
+    );
+
+    eventSource.addEventListener(
+        "status",
+        (event) => {
+
+            if (onStatus) {
+                onStatus(event.data);
+            }
+        }
+    );
+
+    eventSource.onerror = (
+        error
+    ) => {
+
+        if (onError) {
+            onError(error);
+        }
+    };
+
+    return eventSource;
+}
