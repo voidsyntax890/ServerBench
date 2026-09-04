@@ -19,6 +19,7 @@ import com.serverbench.backend.entity.BenchmarkMetricsEntity;
 import com.serverbench.backend.entity.BenchmarkRunEntity;
 import com.serverbench.backend.entity.ExperimentArchitectureEntity;
 import com.serverbench.backend.entity.ExperimentEntity;
+import com.serverbench.backend.metrics.ServerBenchMetrics;
 import com.serverbench.backend.repository.BenchmarkMetricsRepository;
 import com.serverbench.backend.repository.BenchmarkRunRepository;
 import com.serverbench.backend.repository.ExperimentArchitectureRepository;
@@ -57,6 +58,8 @@ public class ExperimentService {
 
     private final Tracer tracer;
 
+    private final ServerBenchMetrics serverBenchMetrics;
+
     /*
      * Runtime-only state.
      *
@@ -76,7 +79,8 @@ public class ExperimentService {
             BenchmarkRunRepository benchmarkRunRepository,
             BenchmarkMetricsRepository
                     benchmarkMetricsRepository,
-            Tracer tracer
+            Tracer tracer,
+            ServerBenchMetrics serverBenchMetrics
     ) {
 
         this.experimentRepository =
@@ -92,6 +96,9 @@ public class ExperimentService {
                 benchmarkMetricsRepository;
 
         this.tracer = tracer;
+
+        this.serverBenchMetrics =
+                serverBenchMetrics;
     }
 
     // ================================================================
@@ -222,6 +229,8 @@ public class ExperimentService {
             experimentRepository.save(
                     record.experimentEntity
             );
+
+            serverBenchMetrics.experimentStarted();
 
             record.executionFuture =
                     CompletableFuture.runAsync(
@@ -792,6 +801,13 @@ public class ExperimentService {
                                         record.liveMetrics =
                                                 progress.getMetricsSnapshot();
 
+                                        serverBenchMetrics.updateBenchmarkMetrics(
+                                                progress.getMetricsSnapshot(),
+                                                record.request.getExecutionMode() == null
+                                                        ? "UNKNOWN"
+                                                        : record.request.getExecutionMode().name()
+                                        );
+
                                         publishLiveEvent(
                                                 record.experiment.getId(),
                                                 "metrics",
@@ -984,6 +1000,8 @@ public class ExperimentService {
             );
 
         } finally {
+
+            serverBenchMetrics.experimentFinished();
 
             experimentSpan.end();
         }
