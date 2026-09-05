@@ -43,6 +43,7 @@ import com.serverbench.engine.core.ServerEngine;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 
 @Service
 public class ExperimentService {
@@ -699,7 +700,7 @@ public class ExperimentService {
                 )
                 .startSpan();
 
-        try {
+        try (Scope experimentScope = experimentSpan.makeCurrent()) {
 
             Experiment experiment =
                     record.experiment;
@@ -771,7 +772,7 @@ public class ExperimentService {
 
             ExperimentResult result;
 
-            try {
+            try (Scope benchmarkScope = benchmarkSpan.makeCurrent()) {
 
                 ServerConfig serverConfig =
                         new ServerConfig(
@@ -890,7 +891,7 @@ public class ExperimentService {
                     )
                     .startSpan();
 
-            try {
+            try (Scope persistenceScope = persistenceSpan.makeCurrent()) {
 
                 persistBenchmarkResults(
                         record.experimentEntity,
