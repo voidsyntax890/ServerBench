@@ -5,6 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,10 +17,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     // ================================================================
     // VALIDATION ERRORS
     // ================================================================
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidationError(
             MethodArgumentNotValidException exception
@@ -29,11 +34,10 @@ public class GlobalExceptionHandler {
         exception.getBindingResult()
                 .getFieldErrors()
                 .forEach(
-                        error ->
-                                fieldErrors.put(
-                                        error.getField(),
-                                        error.getDefaultMessage()
-                                )
+                        error -> fieldErrors.put(
+                                error.getField(),
+                                error.getDefaultMessage()
+                        )
                 );
 
         String requestId =
@@ -56,7 +60,6 @@ public class GlobalExceptionHandler {
     // ================================================================
     // ILLEGAL ARGUMENT
     // ================================================================
-
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(
             IllegalArgumentException exception
@@ -82,7 +85,6 @@ public class GlobalExceptionHandler {
     // ================================================================
     // ILLEGAL STATE
     // ================================================================
-
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(
             IllegalStateException exception
@@ -108,15 +110,20 @@ public class GlobalExceptionHandler {
     // ================================================================
     // UNEXPECTED ERROR
     // ================================================================
-
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleUnexpectedError(
+    public ResponseEntity<ApiError> handleUnexpectedException(
             Exception exception
     ) {
 
-
         String requestId =
                 UUID.randomUUID().toString();
+
+        log.error(
+                "Unhandled exception. requestId={}, message={}",
+                requestId,
+                exception.getMessage(),
+                exception
+        );
 
         ApiError error =
                 new ApiError(

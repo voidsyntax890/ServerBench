@@ -242,4 +242,22 @@ export function subscribeToExperimentLiveUpdates(
     };
 
     return eventSource;
+
+}
+// ================================================================
+// GENERATE AI PERFORMANCE EXPLANATION
+// ================================================================
+export async function getPerformanceExplanation(
+    experimentId,
+    findingIndex
+) {
+    return request(
+        `${API_BASE_URL}/experiments/${experimentId}/analysis/explanation`,
+        {
+            method: "POST",
+            body: JSON.stringify({
+                findingIndex,
+            }),
+        }
+    );
 }

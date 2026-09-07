@@ -8,6 +8,7 @@ import {
     getExperimentResults,
     getExperiment,
     getBottleneckAnalysis,
+    getPerformanceExplanation,
 } from "../services/experimentApi";
 
 import "./Results.css";
@@ -138,6 +139,15 @@ function Results({
     const [analysisError, setAnalysisError] =
         useState("");
 
+    const [aiExplanation, setAiExplanation] =
+        useState(null);
+
+    const [aiLoadingIndex, setAiLoadingIndex] =
+        useState(null);
+
+    const [aiError, setAiError] =
+        useState("");
+
     useEffect(() => {
         let mounted = true;
 
@@ -164,6 +174,9 @@ function Results({
             setLoadError("");
             setAnalysisLoading(true);
             setAnalysisError("");
+            setAiExplanation(null);
+            setAiLoadingIndex(null);
+            setAiError("");
 
             try {
                 const [
@@ -298,6 +311,39 @@ function Results({
                 totalDuration,
             };
         }, [runs]);
+
+    async function handleGenerateExplanation(index) {
+        if (!experimentId || !analysis?.findings?.[index]) {
+            return;
+        }
+
+        setAiLoadingIndex(index);
+        setAiError("");
+
+        try {
+            const response =
+                await getPerformanceExplanation(
+                    experimentId,
+                    index
+                );
+
+            setAiExplanation({
+                index,
+                text: response?.explanation ||
+                    "No explanation was returned by the AI advisor.",
+                title: response?.findingTitle ||
+                    analysis.findings[index]?.title ||
+                    "Performance finding",
+            });
+        } catch (error) {
+            setAiError(
+                error.message ||
+                    "Unable to generate the AI explanation."
+            );
+        } finally {
+            setAiLoadingIndex(null);
+        }
+    }
 
     const highestThroughput =
         useMemo(() => {
@@ -622,7 +668,7 @@ function Results({
             </section>
 
             {/* ==================================================
-                PERFORMANCE ANALYSIS
+                PERFORMANCE ANALYSIS + AI ADVISOR
             ================================================== */}
 
             <section className="results-analysis-card">
@@ -649,6 +695,47 @@ function Results({
                                 : "findings"}
                         </span>
                     )}
+                </div>
+
+                <div className="ai-advisor-hero">
+                    <div className="ai-advisor-glow" />
+                    <div className="ai-advisor-grid" aria-hidden="true" />
+                    <div className="ai-advisor-orbit" aria-hidden="true">
+                        <span className="ai-orbit-dot ai-orbit-dot-one" />
+                        <span className="ai-orbit-dot ai-orbit-dot-two" />
+                    </div>
+                    <div className="ai-advisor-icon" aria-hidden="true">
+                        <svg
+                            className="ai-advisor-signal"
+                            viewBox="0 0 48 48"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <circle className="signal-ring signal-ring-outer" cx="24" cy="24" r="18" />
+                            <circle className="signal-ring signal-ring-middle" cx="24" cy="24" r="11" />
+                            <path className="signal-pulse-line" d="M8 25H15L18 17L22 31L26 21L29 25H40" />
+                            <circle className="signal-core" cx="24" cy="24" r="3.5" />
+                        </svg>
+                    </div>
+                    <div className="ai-advisor-copy">
+                        <div className="ai-advisor-kicker">
+                            BenchPulse Intelligence
+                            <span className="ai-advisor-live-dot" />
+                        </div>
+                        <h3>
+                            From benchmark signals to the next best move.
+                        </h3>
+                        <p>
+                            BenchPulse turns a measured ServerBench finding into a
+                            concise engineering explanation and investigation path.
+                            The benchmark remains the source of truth.
+                        </p>
+                    </div>
+                    <div className="ai-advisor-rule">
+                        <span>Evidence locked</span>
+                        <span>On demand</span>
+                        <span>Action focused</span>
+                    </div>
                 </div>
 
                 {analysisLoading ? (
@@ -700,9 +787,15 @@ function Results({
                                           finding.architecture
                                         : "Experiment-wide";
 
+                                const isGenerating =
+                                    aiLoadingIndex === index;
+
+                                const isExplained =
+                                    aiExplanation?.index === index;
+
                                 return (
                                     <article
-                                        className={`analysis-finding analysis-severity-${severity}`}
+                                        className={`analysis-finding analysis-severity-${severity}${isExplained ? " analysis-finding-active" : ""}`}
                                         key={`${finding.category}-${finding.architecture || "global"}-${index}`}
                                     >
                                         <div className="analysis-finding-top">
@@ -730,6 +823,24 @@ function Results({
                                                         "Performance finding"}
                                                 </h3>
                                             </div>
+
+                                            <button
+                                                className={`ai-explain-button${isExplained ? " ai-explain-button-active" : ""}`}
+                                                type="button"
+                                                onClick={() =>
+                                                    handleGenerateExplanation(index)
+                                                }
+                                                disabled={isGenerating || aiLoadingIndex !== null}
+                                            >
+                                                <span className="ai-explain-spark">
+                                                    ◌
+                                                </span>
+                                                {isGenerating
+                                                    ? "Reading signals..."
+                                                    : isExplained
+                                                        ? "Refresh insight"
+                                                        : "Ask BenchPulse"}
+                                            </button>
                                         </div>
 
                                         {finding.description && (
@@ -761,10 +872,51 @@ function Results({
                                                 </div>
                                             )}
                                         </div>
+
+                                        {isGenerating && (
+                                            <div className="ai-explanation-panel ai-explanation-loading">
+                                                <div className="ai-panel-orb">
+                                                    <span className="ai-panel-orb-core">◌</span>
+                                                </div>
+                                                <div>
+                                                    <strong>BenchPulse is reading the signal pattern</strong>
+                                                    <span>Connecting the detected finding with its recorded evidence.</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {isExplained && !isGenerating && (
+                                            <div className="ai-explanation-panel">
+                                                <div className="ai-panel-heading">
+                                                    <div className="ai-panel-orb">
+                                                        <span className="ai-panel-orb-core">◌</span>
+                                                    </div>
+                                                    <div>
+                                                        <span>BenchPulse insight</span>
+                                                        <strong>{aiExplanation.title}</strong>
+                                                    </div>
+                                                    <span className="ai-panel-badge">Signal → Insight</span>
+                                                </div>
+                                                <div className="ai-explanation-text">
+                                                    {aiExplanation.text.split("\n").map((line, lineIndex) => (
+                                                        <p key={lineIndex}>
+                                                            {line || " "}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </article>
                                 );
                             }
                         )}
+                    </div>
+                )}
+
+                {aiError && (
+                    <div className="ai-explanation-error">
+                        <strong>BenchPulse insight unavailable.</strong>
+                        <span>{aiError}</span>
                     </div>
                 )}
             </section>
