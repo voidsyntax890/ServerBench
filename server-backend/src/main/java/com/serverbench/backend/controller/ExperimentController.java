@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.serverbench.backend.dto.request.ExperimentRequest;
+import com.serverbench.backend.dto.response.BottleneckAnalysisResponse;
 import com.serverbench.backend.dto.response.ComparisonResponse;
 import com.serverbench.backend.dto.response.ExperimentHistoryResponse;
 import com.serverbench.backend.dto.response.ExperimentResponse;
@@ -25,6 +26,7 @@ import com.serverbench.backend.service.ExperimentService;
 import com.serverbench.engine.benchmark.ComparisonSummary;
 import com.serverbench.engine.benchmark.Experiment;
 import com.serverbench.engine.benchmark.ExperimentResult;
+import com.serverbench.engine.benchmark.analysis.BottleneckReport;
 
 import jakarta.validation.Valid;
 
@@ -303,6 +305,32 @@ public class ExperimentController {
         ComparisonResponse response =
                 new ComparisonResponse(
                         summary
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+    // ================================================================
+    // GET BOTTLENECK ANALYSIS
+    // ================================================================
+
+    @GetMapping("/{experimentId}/analysis")
+    public ResponseEntity<BottleneckAnalysisResponse>
+    getBottleneckAnalysis(
+            @PathVariable("experimentId")
+            String experimentId
+    ) {
+
+        BottleneckReport report =
+                experimentService.getBottleneckAnalysis(
+                        experimentId
+                );
+
+        BottleneckAnalysisResponse response =
+                new BottleneckAnalysisResponse(
+                        report
                 );
 
         return ResponseEntity.ok(

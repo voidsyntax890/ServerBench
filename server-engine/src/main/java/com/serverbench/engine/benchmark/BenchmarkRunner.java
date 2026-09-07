@@ -89,16 +89,16 @@ public class BenchmarkRunner {
         AtomicInteger diagnosticFailureCount =
                 new AtomicInteger(0);
 
-        AtomicLong totalLatencyMs =
+        AtomicLong totalLatencyNs =
                 new AtomicLong(0);
 
-        AtomicLong minLatencyMs =
+        AtomicLong minLatencyNs =
                 new AtomicLong(Long.MAX_VALUE);
 
-        AtomicLong maxLatencyMs =
+        AtomicLong maxLatencyNs =
                 new AtomicLong(0);
 
-        List<Long> latencies =
+        List<Long> latenciesNs =
                 Collections.synchronizedList(
                         new ArrayList<>()
                 );
@@ -143,7 +143,7 @@ public class BenchmarkRunner {
                             attemptedRequests,
                             successfulRequests,
                             failedRequests,
-                            totalLatencyMs
+                            totalLatencyNs
                     ),
                     0L,
                     500L,
@@ -183,10 +183,10 @@ public class BenchmarkRunner {
                         noResponseFailures,
                         otherIoFailures,
                         diagnosticFailureCount,
-                        totalLatencyMs,
-                        minLatencyMs,
-                        maxLatencyMs,
-                        latencies
+                        totalLatencyNs,
+                        minLatencyNs,
+                        maxLatencyNs,
+                        latenciesNs
                 );
             });
         }
@@ -296,19 +296,19 @@ public class BenchmarkRunner {
 
         double averageLatencyMs =
                 successful == 0
-                        ? 0
-                        : (double) totalLatencyMs.get()
+                        ? 0.0
+                        : (totalLatencyNs.get() / 1_000_000.0)
                         / successful;
 
         long minimumLatency =
                 successful == 0
                         ? 0
-                        : minLatencyMs.get();
+                        : Math.round(minLatencyNs.get() / 1_000_000.0);
 
         long maximumLatency =
                 successful == 0
                         ? 0
-                        : maxLatencyMs.get();
+                        : Math.round(maxLatencyNs.get() / 1_000_000.0);
 
         double throughput =
                 successful == 0
@@ -339,40 +339,40 @@ public class BenchmarkRunner {
                 attemptedRequests,
                 successfulRequests,
                 failedRequests,
-                totalLatencyMs
+                totalLatencyNs
         );
 
         // ============================================================
         // PERCENTILES
         // ============================================================
 
-        List<Long> sortedLatencies;
+        List<Long> sortedLatenciesNs;
 
-        synchronized (latencies) {
+        synchronized (latenciesNs) {
 
-            sortedLatencies =
-                    new ArrayList<>(latencies);
+            sortedLatenciesNs =
+                    new ArrayList<>(latenciesNs);
         }
 
-        Collections.sort(sortedLatencies);
+        Collections.sort(sortedLatenciesNs);
 
         double p50 =
                 calculatePercentile(
-                        sortedLatencies,
+                        sortedLatenciesNs,
                         50
-                );
+                ) / 1_000_000.0;
 
         double p95 =
                 calculatePercentile(
-                        sortedLatencies,
+                        sortedLatenciesNs,
                         95
-                );
+                ) / 1_000_000.0;
 
         double p99 =
                 calculatePercentile(
-                        sortedLatencies,
+                        sortedLatenciesNs,
                         99
-                );
+                ) / 1_000_000.0;
 
         // ============================================================
         // FINAL RESULT
@@ -411,7 +411,7 @@ public class BenchmarkRunner {
             AtomicInteger attemptedRequests,
             AtomicInteger successfulRequests,
             AtomicInteger failedRequests,
-            AtomicLong totalLatencyMs
+            AtomicLong totalLatencyNs
     ) {
 
         if (snapshotListener == null) {
@@ -442,7 +442,7 @@ public class BenchmarkRunner {
         double averageLatency =
                 successful == 0
                         ? 0.0
-                        : (double) totalLatencyMs.get()
+                        : (totalLatencyNs.get() / 1_000_000.0)
                         / successful;
 
         BenchmarkMetricsSnapshot snapshot =
@@ -488,10 +488,10 @@ public class BenchmarkRunner {
             AtomicInteger noResponseFailures,
             AtomicInteger otherIoFailures,
             AtomicInteger diagnosticFailureCount,
-            AtomicLong totalLatencyMs,
-            AtomicLong minLatencyMs,
-            AtomicLong maxLatencyMs,
-            List<Long> latencies
+            AtomicLong totalLatencyNs,
+            AtomicLong minLatencyNs,
+            AtomicLong maxLatencyNs,
+            List<Long> latenciesNs
     ) {
 
         try (
@@ -628,36 +628,34 @@ public class BenchmarkRunner {
                         long requestEndTime =
                                 System.nanoTime();
 
-                        long latencyMs =
-                                TimeUnit.NANOSECONDS.toMillis(
-                                        requestEndTime
-                                                - requestStartTime
-                                );
+                        long latencyNs =
+                                requestEndTime
+                                        - requestStartTime;
 
                         if (response != null) {
 
                             successfulRequests
                                     .incrementAndGet();
 
-                            totalLatencyMs
+                            totalLatencyNs
                                     .addAndGet(
-                                            latencyMs
+                                            latencyNs
                                     );
 
-                            minLatencyMs
+                            minLatencyNs
                                     .accumulateAndGet(
-                                            latencyMs,
+                                            latencyNs,
                                             Math::min
                                     );
 
-                            maxLatencyMs
+                            maxLatencyNs
                                     .accumulateAndGet(
-                                            latencyMs,
+                                            latencyNs,
                                             Math::max
                                     );
 
-                            latencies.add(
-                                    latencyMs
+                            latenciesNs.add(
+                                    latencyNs
                             );
 
                         } else {
@@ -939,17 +937,17 @@ public class BenchmarkRunner {
     // ================================================================
 
     private double calculatePercentile(
-            List<Long> sortedLatencies,
+            List<Long> sortedLatenciesNs,
             double percentile
     ) {
 
-        if (sortedLatencies.isEmpty()) {
+        if (sortedLatenciesNs.isEmpty()) {
             return 0;
         }
 
         double rank =
                 (percentile / 100.0)
-                        * (sortedLatencies.size() - 1);
+                        * (sortedLatenciesNs.size() - 1);
 
         int lowerIndex =
                 (int) Math.floor(rank);
@@ -959,16 +957,16 @@ public class BenchmarkRunner {
 
         if (lowerIndex == upperIndex) {
 
-            return sortedLatencies
+            return sortedLatenciesNs
                     .get(lowerIndex);
         }
 
         double lowerValue =
-                sortedLatencies
+                sortedLatenciesNs
                         .get(lowerIndex);
 
         double upperValue =
-                sortedLatencies
+                sortedLatenciesNs
                         .get(upperIndex);
 
         double fraction =

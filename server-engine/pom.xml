@@ -13,7 +13,25 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Test framework -->
+        <junit.jupiter.version>5.10.2</junit.jupiter.version>
+
+        <!-- Reliable JUnit 5 test discovery/execution -->
+        <maven.surefire.version>3.2.5</maven.surefire.version>
     </properties>
+
+    <dependencies>
+
+        <!-- JUnit 5 for server-engine unit tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
 
     <build>
         <plugins>
@@ -26,6 +44,13 @@
                 <configuration>
                     <mainClass>com.serverbench.engine.Main</mainClass>
                 </configuration>
+            </plugin>
+
+            <!-- Explicit JUnit 5 test execution -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
             </plugin>
 
         </plugins>

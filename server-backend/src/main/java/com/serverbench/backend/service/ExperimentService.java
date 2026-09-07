@@ -39,6 +39,8 @@ import com.serverbench.engine.benchmark.ExperimentRunResult;
 import com.serverbench.engine.benchmark.ExperimentRunner;
 import com.serverbench.engine.benchmark.ServerArchitecture;
 import com.serverbench.engine.benchmark.ServerFactory;
+import com.serverbench.engine.benchmark.analysis.BottleneckReport;
+import com.serverbench.engine.benchmark.analysis.RuleBasedBottleneckAnalyzer;
 import com.serverbench.engine.core.ServerConfig;
 import com.serverbench.engine.core.ServerEngine;
 
@@ -674,6 +676,33 @@ public class ExperimentService {
 
         ExperimentAnalyzer analyzer
                 = new ExperimentAnalyzer();
+
+        return analyzer.analyze(
+                result
+        );
+    }
+
+    // ================================================================
+    // GET BOTTLENECK ANALYSIS
+    // ================================================================
+    public BottleneckReport getBottleneckAnalysis(
+            String experimentId
+    ) {
+
+        ExperimentResult result
+                = getResult(
+                        experimentId
+                );
+
+        if (result == null) {
+
+            throw new IllegalStateException(
+                    "Experiment results are not available yet."
+            );
+        }
+
+        RuleBasedBottleneckAnalyzer analyzer
+                = new RuleBasedBottleneckAnalyzer();
 
         return analyzer.analyze(
                 result

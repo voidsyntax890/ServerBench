@@ -19,7 +19,7 @@ public class TelemetryConfig {
     private static final String SERVICE_NAME =
             "serverbench-backend";
 
-    @Bean
+    @Bean(destroyMethod = "close")
     public OpenTelemetry openTelemetry() {
 
         Resource resource =
@@ -63,7 +63,7 @@ public class TelemetryConfig {
                 .setTracerProvider(
                         tracerProvider
                 )
-                .buildAndRegisterGlobal();
+                .build();
     }
 
     @Bean
