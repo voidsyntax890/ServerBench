@@ -301,6 +301,271 @@
 }
 
 /* ================================================================
+   PERFORMANCE ANALYSIS
+================================================================ */
+
+.results-analysis-card {
+    margin-bottom: 22px;
+
+    padding: 24px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.025);
+}
+
+.results-analysis-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    gap: 18px;
+
+    padding-bottom: 18px;
+
+    border-bottom: 1px solid #eef2f7;
+}
+
+.analysis-eyebrow {
+    color: #94a3b8;
+
+    font-size: 9px;
+    font-weight: 700;
+
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.results-analysis-header h2 {
+    margin: 8px 0 0;
+
+    color: #172033;
+
+    font-size: 18px;
+    line-height: 1.2;
+
+    letter-spacing: -0.025em;
+}
+
+.results-analysis-header p {
+    margin: 6px 0 0;
+
+    max-width: 620px;
+
+    color: #64748b;
+
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+.analysis-count {
+    flex: 0 0 auto;
+
+    padding: 6px 9px;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+
+    background: #f8fafc;
+    color: #64748b;
+
+    font-size: 9px;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+.analysis-findings {
+    display: grid;
+
+    gap: 12px;
+
+    padding-top: 18px;
+}
+
+.analysis-finding {
+    padding: 16px;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 9px;
+
+    background: #fbfcfe;
+}
+
+.analysis-finding-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    gap: 14px;
+}
+
+.analysis-finding-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+
+    gap: 6px;
+
+    margin-bottom: 8px;
+}
+
+.analysis-severity-badge,
+.analysis-category,
+.analysis-architecture {
+    display: inline-flex;
+    align-items: center;
+
+    min-height: 20px;
+
+    padding: 3px 7px;
+
+    border-radius: 999px;
+
+    font-size: 8px;
+    font-weight: 700;
+
+    letter-spacing: 0.03em;
+}
+
+.analysis-category {
+    border: 1px solid #e2e8f0;
+
+    background: #ffffff;
+    color: #64748b;
+}
+
+.analysis-architecture {
+    border: 1px solid #e2e8f0;
+
+    background: #f8fafc;
+    color: #475569;
+
+    font-weight: 600;
+}
+
+.analysis-severity-badge-info {
+    border: 1px solid #dbeafe;
+
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.analysis-severity-badge-warning {
+    border: 1px solid #fde68a;
+
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.analysis-severity-badge-critical {
+    border: 1px solid #fecaca;
+
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.analysis-finding h3 {
+    margin: 0;
+
+    color: #172033;
+
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.analysis-description {
+    margin: 12px 0 0;
+
+    color: #475569;
+
+    font-size: 10px;
+    line-height: 1.65;
+}
+
+.analysis-detail-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 10px;
+
+    margin-top: 14px;
+}
+
+.analysis-detail {
+    padding: 11px 12px;
+
+    border: 1px solid #eef2f7;
+    border-radius: 8px;
+
+    background: #ffffff;
+}
+
+.analysis-detail span {
+    display: block;
+
+    color: #94a3b8;
+
+    font-size: 8px;
+    font-weight: 700;
+
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.analysis-detail strong {
+    display: block;
+
+    margin-top: 6px;
+
+    color: #475569;
+
+    font-size: 9px;
+    font-weight: 500;
+    line-height: 1.6;
+}
+
+.analysis-state {
+    min-height: 150px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    gap: 6px;
+
+    padding-top: 10px;
+
+    text-align: center;
+}
+
+.analysis-state strong {
+    color: #334155;
+
+    font-size: 13px;
+}
+
+.analysis-state span {
+    max-width: 560px;
+
+    color: #94a3b8;
+
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.analysis-state-error strong {
+    color: #dc2626;
+}
+
+/* ================================================================
    RUN CARD
 ================================================================ */
 
@@ -660,6 +925,10 @@
         grid-template-columns:
             repeat(3, minmax(0, 1fr));
     }
+
+    .analysis-detail-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 780px) {
@@ -700,6 +969,14 @@
     .results-bottom-action {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .results-analysis-header {
+        flex-direction: column;
+    }
+
+    .analysis-count {
+        align-self: flex-start;
     }
 }
 

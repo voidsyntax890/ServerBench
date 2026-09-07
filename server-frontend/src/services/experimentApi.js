@@ -36,9 +36,9 @@ async function request(
             headers: {
                 ...(options.body
                     ? {
-                          "Content-Type":
-                              "application/json",
-                      }
+                        "Content-Type":
+                            "application/json",
+                    }
                     : {}),
                 ...(options.headers || {}),
             },
@@ -131,6 +131,21 @@ export async function getExperimentComparison(
 ) {
     return request(
         `${API_BASE_URL}/experiments/${experimentId}/comparison`,
+        {
+            method: "GET",
+        }
+    );
+}
+
+// ================================================================
+// GET BOTTLENECK ANALYSIS
+// ================================================================
+
+export async function getBottleneckAnalysis(
+    experimentId
+) {
+    return request(
+        `${API_BASE_URL}/experiments/${experimentId}/analysis`,
         {
             method: "GET",
         }

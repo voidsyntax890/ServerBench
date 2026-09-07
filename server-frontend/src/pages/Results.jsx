@@ -7,6 +7,7 @@ import {
 import {
     getExperimentResults,
     getExperiment,
+    getBottleneckAnalysis,
 } from "../services/experimentApi";
 
 import "./Results.css";
@@ -128,6 +129,15 @@ function Results({
     const [loadError, setLoadError] =
         useState("");
 
+    const [analysis, setAnalysis] =
+        useState(null);
+
+    const [analysisLoading, setAnalysisLoading] =
+        useState(true);
+
+    const [analysisError, setAnalysisError] =
+        useState("");
+
     useEffect(() => {
         let mounted = true;
 
@@ -136,10 +146,15 @@ function Results({
                 if (mounted) {
                     setResult(null);
                     setExperiment(null);
+                    setAnalysis(null);
                     setLoadError(
                         "No experiment was selected."
                     );
+                    setAnalysisError(
+                        "No experiment was selected."
+                    );
                     setIsLoading(false);
+                    setAnalysisLoading(false);
                 }
 
                 return;
@@ -147,6 +162,8 @@ function Results({
 
             setIsLoading(true);
             setLoadError("");
+            setAnalysisLoading(true);
+            setAnalysisError("");
 
             try {
                 const [
@@ -182,6 +199,32 @@ function Results({
             } finally {
                 if (mounted) {
                     setIsLoading(false);
+                }
+            }
+
+            try {
+                const analysisResponse =
+                    await getBottleneckAnalysis(
+                        experimentId
+                    );
+
+                if (mounted) {
+                    setAnalysis(
+                        analysisResponse
+                    );
+                    setAnalysisError("");
+                }
+            } catch (error) {
+                if (mounted) {
+                    setAnalysis(null);
+                    setAnalysisError(
+                        error.message ||
+                            "Unable to load performance analysis."
+                    );
+                }
+            } finally {
+                if (mounted) {
+                    setAnalysisLoading(false);
                 }
             }
         }
@@ -576,6 +619,154 @@ function Results({
 
                 </div>
 
+            </section>
+
+            {/* ==================================================
+                PERFORMANCE ANALYSIS
+            ================================================== */}
+
+            <section className="results-analysis-card">
+                <div className="results-analysis-header">
+                    <div>
+                        <span className="analysis-eyebrow">
+                            Performance Analysis
+                        </span>
+                        <h2>
+                            Rule-Based Findings
+                        </h2>
+                        <p>
+                            Deterministic findings derived from the
+                            recorded benchmark measurements.
+                        </p>
+                    </div>
+
+                    {analysis && (
+                        <span className="analysis-count">
+                            {analysis.findingCount ?? 0}
+                            {" "}
+                            {(analysis.findingCount ?? 0) === 1
+                                ? "finding"
+                                : "findings"}
+                        </span>
+                    )}
+                </div>
+
+                {analysisLoading ? (
+                    <div className="analysis-state">
+                        <strong>
+                            Analyzing benchmark results...
+                        </strong>
+                        <span>
+                            Evaluating measured failures, latency
+                            behavior, and architecture-level patterns.
+                        </span>
+                    </div>
+                ) : analysisError ? (
+                    <div className="analysis-state analysis-state-error">
+                        <strong>
+                            Performance analysis unavailable.
+                        </strong>
+                        <span>
+                            {analysisError}
+                        </span>
+                    </div>
+                ) : !analysis ||
+                  !Array.isArray(analysis.findings) ||
+                  analysis.findings.length === 0 ? (
+                    <div className="analysis-state">
+                        <strong>
+                            No rule-based findings detected.
+                        </strong>
+                        <span>
+                            The recorded benchmark measurements did not
+                            trigger any current analysis rules.
+                        </span>
+                    </div>
+                ) : (
+                    <div className="analysis-findings">
+                        {analysis.findings.map(
+                            (finding, index) => {
+                                const severity =
+                                    (
+                                        finding.severity ||
+                                        "INFO"
+                                    ).toLowerCase();
+
+                                const architecture =
+                                    finding.architecture
+                                        ? architectureNames[
+                                              finding.architecture
+                                          ] ||
+                                          finding.architecture
+                                        : "Experiment-wide";
+
+                                return (
+                                    <article
+                                        className={`analysis-finding analysis-severity-${severity}`}
+                                        key={`${finding.category}-${finding.architecture || "global"}-${index}`}
+                                    >
+                                        <div className="analysis-finding-top">
+                                            <div>
+                                                <div className="analysis-finding-meta">
+                                                    <span
+                                                        className={`analysis-severity-badge analysis-severity-badge-${severity}`}
+                                                    >
+                                                        {finding.severity ||
+                                                            "INFO"}
+                                                    </span>
+
+                                                    <span className="analysis-category">
+                                                        {finding.category ||
+                                                            "ANALYSIS"}
+                                                    </span>
+
+                                                    <span className="analysis-architecture">
+                                                        {architecture}
+                                                    </span>
+                                                </div>
+
+                                                <h3>
+                                                    {finding.title ||
+                                                        "Performance finding"}
+                                                </h3>
+                                            </div>
+                                        </div>
+
+                                        {finding.description && (
+                                            <p className="analysis-description">
+                                                {finding.description}
+                                            </p>
+                                        )}
+
+                                        <div className="analysis-detail-grid">
+                                            {finding.evidence && (
+                                                <div className="analysis-detail">
+                                                    <span>
+                                                        Evidence
+                                                    </span>
+                                                    <strong>
+                                                        {finding.evidence}
+                                                    </strong>
+                                                </div>
+                                            )}
+
+                                            {finding.recommendation && (
+                                                <div className="analysis-detail">
+                                                    <span>
+                                                        Recommendation
+                                                    </span>
+                                                    <strong>
+                                                        {finding.recommendation}
+                                                    </strong>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </article>
+                                );
+                            }
+                        )}
+                    </div>
+                )}
             </section>
 
             {/* ==================================================
