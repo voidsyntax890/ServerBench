@@ -19,7 +19,9 @@
 
     <modules>
         <module>server-engine</module>
+        <module>server-distributed-contracts</module>
         <module>server-backend</module>
+        <module>server-agent</module>
     </modules>
 
     <properties>

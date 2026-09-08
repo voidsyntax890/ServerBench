@@ -314,6 +314,144 @@ public class ExperimentService {
     }
 
     // ================================================================
+// DISTRIBUTED EXPERIMENT STATE
+// ================================================================
+    public void markDistributedExperimentRunning(
+            String experimentId
+    ) {
+        ExperimentRecord record
+                = getOrRestoreRuntimeRecord(
+                        experimentId
+                );
+
+        synchronized (record) {
+
+            if (record.status
+                    != ExperimentStatus.CREATED) {
+
+                throw new IllegalStateException(
+                        "Experiment must be in CREATED state before "
+                        + "distributed execution can start."
+                );
+            }
+
+            record.status
+                    = ExperimentStatus.RUNNING;
+
+            record.experimentEntity.setStatus(
+                    ExperimentStatus.RUNNING.name()
+            );
+
+            experimentRepository.save(
+                    record.experimentEntity
+            );
+
+            saveRuntimeState(record);
+
+            serverBenchMetrics.experimentStarted();
+
+            publishLiveStatus(
+                    experimentId,
+                    ExperimentStatus.RUNNING
+            );
+        }
+    }
+
+    public void markDistributedExperimentCreated(
+            String experimentId
+    ) {
+        ExperimentRecord record
+                = getOrRestoreRuntimeRecord(
+                        experimentId
+                );
+
+        synchronized (record) {
+
+            record.status
+                    = ExperimentStatus.CREATED;
+
+            record.experimentEntity.setStatus(
+                    ExperimentStatus.CREATED.name()
+            );
+
+            experimentRepository.save(
+                    record.experimentEntity
+            );
+
+            saveRuntimeState(record);
+
+            publishLiveStatus(
+                    experimentId,
+                    ExperimentStatus.CREATED
+            );
+        }
+    }
+
+    // ================================================================
+    // REFRESH DISTRIBUTED EXECUTION STATE
+    // ================================================================
+    public void refreshDistributedExperimentState(
+            String experimentId
+    ) {
+
+        ExperimentRecord runtimeRecord
+                = experiments.get(
+                        experimentId
+                );
+
+        if (runtimeRecord == null) {
+            return;
+        }
+
+        ExperimentEntity entity
+                = getExperimentEntity(
+                        experimentId
+                );
+
+        ExperimentStatus status
+                = ExperimentStatus.valueOf(
+                        entity.getStatus()
+                );
+
+        synchronized (runtimeRecord) {
+
+            runtimeRecord.status
+                    = status;
+
+            if (status
+                    == ExperimentStatus.COMPLETED) {
+
+                runtimeRecord.result
+                        = restoreExperimentResult(
+                                entity
+                        );
+
+                runtimeRecord.errorMessage
+                        = "";
+
+            } else if (status
+                    == ExperimentStatus.FAILED) {
+
+                runtimeRecord.errorMessage
+                        = "Persisted distributed experiment failed.";
+            }
+
+            /*
+         * PostgreSQL contains the persisted terminal state.
+         * Redis must be refreshed as well so getStatus(),
+         * progress APIs, and SSE do not continue reporting
+         * the previous RUNNING state.
+             */
+            saveRuntimeState(runtimeRecord);
+        }
+
+        publishLiveStatus(
+                experimentId,
+                status
+        );
+    }
+
+    // ================================================================
     // GET RESULT
     // ================================================================
     public ExperimentResult getResult(
@@ -1643,10 +1781,10 @@ public class ExperimentService {
             return null;
         }
 
-        int currentRepetition =
-                state.getCurrentRepetition() == null
-                        ? 1
-                        : state.getCurrentRepetition();
+        int currentRepetition
+                = state.getCurrentRepetition() == null
+                ? 1
+                : state.getCurrentRepetition();
 
         if (state.getServerType() != null) {
 
@@ -1661,11 +1799,11 @@ public class ExperimentService {
                 state.getCurrentArchitecture(),
                 currentRepetition,
                 state.getCompletedRuns() == null
-                        ? 0
-                        : state.getCompletedRuns(),
+                ? 0
+                : state.getCompletedRuns(),
                 state.getTotalRuns() == null
-                        ? 0
-                        : state.getTotalRuns()
+                ? 0
+                : state.getTotalRuns()
         );
     }
 
@@ -1676,23 +1814,23 @@ public class ExperimentService {
         return new BenchmarkMetricsSnapshot(
                 state.getServerType(),
                 state.getAttemptedRequests() == null
-                        ? 0
-                        : state.getAttemptedRequests(),
+                ? 0
+                : state.getAttemptedRequests(),
                 state.getSuccessfulRequests() == null
-                        ? 0
-                        : state.getSuccessfulRequests(),
+                ? 0
+                : state.getSuccessfulRequests(),
                 state.getFailedRequests() == null
-                        ? 0
-                        : state.getFailedRequests(),
+                ? 0
+                : state.getFailedRequests(),
                 state.getThroughputRequestsPerSecond() == null
-                        ? 0.0
-                        : state.getThroughputRequestsPerSecond(),
+                ? 0.0
+                : state.getThroughputRequestsPerSecond(),
                 state.getAverageLatencyMs() == null
-                        ? 0.0
-                        : state.getAverageLatencyMs(),
+                ? 0.0
+                : state.getAverageLatencyMs(),
                 state.getElapsedTimeMs() == null
-                        ? 0L
-                        : state.getElapsedTimeMs()
+                ? 0L
+                : state.getElapsedTimeMs()
         );
     }
 

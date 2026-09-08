@@ -92,6 +92,42 @@ public class BenchmarkRunEntity {
     private LocalDateTime finishedAt;
 
     // ================================================================
+    // DISTRIBUTED EXECUTION METADATA
+    // ================================================================
+
+    /*
+     * Kafka benchmark job ID.
+     *
+     * This is unique because the same Kafka result can be delivered
+     * again after a retry/restart. The job ID gives us an idempotency
+     * key so the backend does not create duplicate benchmark runs.
+     */
+    @Column(
+            name = "distributed_job_id",
+            unique = true,
+            length = 100
+    )
+    private String distributedJobId;
+
+    /*
+     * Logical distributed run ID supplied by the controller.
+     */
+    @Column(
+            name = "distributed_run_id",
+            length = 100
+    )
+    private String distributedRunId;
+
+    /*
+     * Agent that actually executed this benchmark job.
+     */
+    @Column(
+            name = "agent_id",
+            length = 100
+    )
+    private String agentId;
+
+    // ================================================================
     // CONSTRUCTORS
     // ================================================================
 
@@ -101,6 +137,12 @@ public class BenchmarkRunEntity {
          */
     }
 
+    /*
+     * Existing constructor used by local execution.
+     *
+     * Keeping this constructor unchanged protects the current
+     * local benchmark persistence path.
+     */
     public BenchmarkRunEntity(
             ExperimentEntity experiment,
             ServerArchitecture architecture,
@@ -131,6 +173,42 @@ public class BenchmarkRunEntity {
 
         this.finishedAt =
                 finishedAt;
+    }
+
+    /*
+     * Constructor used by distributed result aggregation.
+     */
+    public BenchmarkRunEntity(
+            ExperimentEntity experiment,
+            ServerArchitecture architecture,
+            Integer repetitionNumber,
+            Status status,
+            String errorMessage,
+            LocalDateTime startedAt,
+            LocalDateTime finishedAt,
+            String distributedJobId,
+            String distributedRunId,
+            String agentId
+    ) {
+
+        this(
+                experiment,
+                architecture,
+                repetitionNumber,
+                status,
+                errorMessage,
+                startedAt,
+                finishedAt
+        );
+
+        this.distributedJobId =
+                distributedJobId;
+
+        this.distributedRunId =
+                distributedRunId;
+
+        this.agentId =
+                agentId;
     }
 
     // ================================================================
@@ -167,5 +245,17 @@ public class BenchmarkRunEntity {
 
     public LocalDateTime getFinishedAt() {
         return finishedAt;
+    }
+
+    public String getDistributedJobId() {
+        return distributedJobId;
+    }
+
+    public String getDistributedRunId() {
+        return distributedRunId;
+    }
+
+    public String getAgentId() {
+        return agentId;
     }
 }
