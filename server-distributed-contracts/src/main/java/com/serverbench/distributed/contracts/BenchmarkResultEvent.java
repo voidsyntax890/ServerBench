@@ -10,8 +10,13 @@ public record BenchmarkResultEvent(
         String agentId,
         JobStatus status,
         String errorMessage,
+
         String architecture,
         int repetitionNumber,
+
+        String targetHost,
+        int targetPort,
+
         long totalRequests,
         long successfulRequests,
         long failedRequests,
@@ -23,12 +28,14 @@ public record BenchmarkResultEvent(
         double p50LatencyMs,
         double p95LatencyMs,
         double p99LatencyMs,
+
         long connectTimeouts,
         long connectionRefused,
         long connectionResets,
         long readTimeouts,
         long noResponseFailures,
         long otherIoFailures,
+
         Instant startedAt,
         Instant finishedAt,
         Instant occurredAt

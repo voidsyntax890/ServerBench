@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.serverbench.backend.dto.redis.ExperimentRuntimeState;
+import com.serverbench.backend.dto.request.DistributedBenchmarkTargetRequest;
 import com.serverbench.backend.dto.request.ExperimentRequest;
 import com.serverbench.backend.entity.BenchmarkMetricsEntity;
 import com.serverbench.backend.entity.BenchmarkRunEntity;
@@ -157,9 +158,15 @@ public class ExperimentService {
                 experimentEntity
         );
 
+        validateDistributedTargets(
+                request,
+                experiment.getArchitectures()
+        );
+
         persistArchitectures(
                 experiment.getId(),
-                experiment.getArchitectures()
+                experiment.getArchitectures(),
+                request.getDistributedTargets()
         );
 
         ExperimentRecord record
@@ -385,6 +392,29 @@ public class ExperimentService {
                     ExperimentStatus.CREATED
             );
         }
+    }
+
+    public void recordDistributedPublicationFailure(
+            String experimentId,
+            String errorMessage
+    ) {
+        ExperimentRecord record
+                = getOrRestoreRuntimeRecord(experimentId);
+
+        synchronized (record) {
+            record.errorMessage
+                    = errorMessage == null || errorMessage.isBlank()
+                    ? "Distributed job publication failed."
+                    : errorMessage;
+
+            saveRuntimeState(record);
+        }
+
+        publishLiveEvent(
+                experimentId,
+                "error",
+                record.errorMessage
+        );
     }
 
     // ================================================================
@@ -903,6 +933,18 @@ public class ExperimentService {
                 );
 
         return entity.getThreadPoolSize();
+    }
+
+    // ================================================================
+    // GET DISTRIBUTED TARGETS
+    // ================================================================
+    public List<ExperimentArchitectureEntity> getDistributedArchitectureTargets(
+            String experimentId
+    ) {
+        return List.copyOf(
+                experimentArchitectureRepository
+                        .findByExperimentId(experimentId)
+        );
     }
 
     // ================================================================
@@ -1665,8 +1707,20 @@ public class ExperimentService {
     // ================================================================
     private void persistArchitectures(
             String experimentId,
-            List<ServerArchitecture> architectures
+            List<ServerArchitecture> architectures,
+            List<DistributedBenchmarkTargetRequest> distributedTargets
     ) {
+
+        Map<ServerArchitecture, DistributedBenchmarkTargetRequest> targetsByArchitecture
+                = distributedTargets == null
+                        ? Map.of()
+                        : distributedTargets.stream()
+                                .collect(
+                                        java.util.stream.Collectors.toMap(
+                                                DistributedBenchmarkTargetRequest::getArchitecture,
+                                                target -> target
+                                        )
+                                );
 
         List<ExperimentArchitectureEntity> entities
                 = new ArrayList<>();
@@ -1674,10 +1728,15 @@ public class ExperimentService {
         for (ServerArchitecture architecture
                 : architectures) {
 
+            DistributedBenchmarkTargetRequest target
+                    = targetsByArchitecture.get(architecture);
+
             entities.add(
                     new ExperimentArchitectureEntity(
                             experimentId,
-                            architecture
+                            architecture,
+                            target == null ? null : target.getHost(),
+                            target == null ? null : target.getPort()
                     )
             );
         }
@@ -1685,6 +1744,67 @@ public class ExperimentService {
         experimentArchitectureRepository.saveAll(
                 entities
         );
+    }
+
+    private void validateDistributedTargets(
+            ExperimentRequest request,
+            List<ServerArchitecture> architectures
+    ) {
+
+        List<DistributedBenchmarkTargetRequest> targets
+                = request.getDistributedTargets();
+
+        if (targets == null || targets.isEmpty()) {
+            return;
+        }
+
+        java.util.Set<ServerArchitecture> selectedArchitectures
+                = new java.util.HashSet<>(architectures);
+
+        java.util.Set<ServerArchitecture> targetArchitectures
+                = new java.util.HashSet<>();
+
+        for (DistributedBenchmarkTargetRequest target : targets) {
+
+            if (target == null
+                    || target.getArchitecture() == null) {
+                throw new IllegalArgumentException(
+                        "Distributed target architecture cannot be null."
+                );
+            }
+
+            if (!selectedArchitectures.contains(target.getArchitecture())) {
+                throw new IllegalArgumentException(
+                        "Distributed target architecture "
+                        + target.getArchitecture()
+                        + " is not selected for the experiment."
+                );
+            }
+
+            if (!targetArchitectures.add(target.getArchitecture())) {
+                throw new IllegalArgumentException(
+                        "Duplicate distributed target for architecture "
+                        + target.getArchitecture()
+                );
+            }
+
+            if (target.getHost() == null
+                    || target.getHost().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Distributed target host cannot be blank for architecture "
+                        + target.getArchitecture()
+                );
+            }
+
+            if (target.getPort() == null
+                    || target.getPort() < 1
+                    || target.getPort() > 65535) {
+                throw new IllegalArgumentException(
+                        "Distributed target port must be between 1 and 65535 for architecture "
+                        + target.getArchitecture()
+                );
+            }
+        }
     }
 
     private ExperimentRuntimeState
@@ -1939,6 +2059,38 @@ public class ExperimentService {
 
         request.setArchitectures(
                 experiment.getArchitectures()
+        );
+
+        List<DistributedBenchmarkTargetRequest> distributedTargets
+                = experimentArchitectureRepository
+                        .findByExperimentId(experiment.getId())
+                        .stream()
+                        .filter(architectureEntity
+                                -> architectureEntity.getTargetHost() != null
+                        && architectureEntity.getTargetPort() != null
+                        )
+                        .map(architectureEntity -> {
+                            DistributedBenchmarkTargetRequest target
+                                    = new DistributedBenchmarkTargetRequest();
+
+                            target.setArchitecture(
+                                    architectureEntity.getArchitecture()
+                            );
+
+                            target.setHost(
+                                    architectureEntity.getTargetHost()
+                            );
+
+                            target.setPort(
+                                    architectureEntity.getTargetPort()
+                            );
+
+                            return target;
+                        })
+                        .toList();
+
+        request.setDistributedTargets(
+                distributedTargets.isEmpty() ? null : distributedTargets
         );
 
         ExperimentRecord restoredRecord

@@ -127,6 +127,17 @@ public class BenchmarkRunEntity {
     )
     private String agentId;
 
+    @Column(
+            name = "target_host",
+            length = 255
+    )
+    private String targetHost;
+
+    @Column(
+            name = "target_port"
+    )
+    private Integer targetPort;
+
     // ================================================================
     // CONSTRUCTORS
     // ================================================================
@@ -188,7 +199,9 @@ public class BenchmarkRunEntity {
             LocalDateTime finishedAt,
             String distributedJobId,
             String distributedRunId,
-            String agentId
+            String agentId,
+            String targetHost,
+            Integer targetPort
     ) {
 
         this(
@@ -209,6 +222,12 @@ public class BenchmarkRunEntity {
 
         this.agentId =
                 agentId;
+
+        this.targetHost =
+                targetHost;
+
+        this.targetPort =
+                targetPort;
     }
 
     // ================================================================
@@ -257,5 +276,13 @@ public class BenchmarkRunEntity {
 
     public String getAgentId() {
         return agentId;
+    }
+
+    public String getTargetHost() {
+        return targetHost;
+    }
+
+    public Integer getTargetPort() {
+        return targetPort;
     }
 }

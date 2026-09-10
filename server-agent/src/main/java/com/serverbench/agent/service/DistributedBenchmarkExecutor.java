@@ -321,6 +321,8 @@ public class DistributedBenchmarkExecutor {
                         "",
                         result.getServerType(),
                         job.repetitionNumber(),
+                        job.targetHost(),
+                        job.targetPort(),
                         result.getTotalRequests(),
                         result.getSuccessfulRequests(),
                         result.getFailedRequests(),
@@ -373,6 +375,8 @@ public class DistributedBenchmarkExecutor {
                                 job.architecture()
                         ),
                         job.repetitionNumber(),
+                        job.targetHost(),
+                        job.targetPort(),
                         0,
                         0,
                         0,

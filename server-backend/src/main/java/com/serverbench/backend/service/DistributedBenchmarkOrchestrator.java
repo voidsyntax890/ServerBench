@@ -1,13 +1,15 @@
 package com.serverbench.backend.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
 import com.serverbench.backend.dto.response.AgentRecordResponse;
-import com.serverbench.distributed.contracts.AgentStatus;
+import com.serverbench.backend.entity.ExperimentArchitectureEntity;
 import com.serverbench.distributed.contracts.BenchmarkJob;
+import com.serverbench.distributed.contracts.AgentStatus;
 import com.serverbench.engine.benchmark.BenchmarkConfig;
 import com.serverbench.engine.benchmark.ExecutionMode;
 import com.serverbench.engine.benchmark.Experiment;
@@ -30,17 +32,14 @@ public class DistributedBenchmarkOrchestrator {
         this.distributedJobPublisher = distributedJobPublisher;
     }
 
-    public BenchmarkJob start(
-            String experimentId,
-            ServerArchitecture architecture
+    /**
+     * Creates and publishes the complete distributed experiment matrix:
+     * every selected architecture multiplied by every configured repetition.
+     */
+    public List<BenchmarkJob> start(
+            String experimentId
     ) {
         validateExperimentId(experimentId);
-
-        if (architecture == null) {
-            throw new IllegalArgumentException(
-                    "Distributed benchmark architecture cannot be null."
-            );
-        }
 
         Experiment experiment =
                 experimentService.getExperiment(experimentId);
@@ -51,114 +50,98 @@ public class DistributedBenchmarkOrchestrator {
             );
         }
 
-        validateExperimentArchitecture(
-                experiment,
-                architecture
-        );
-
         if (experimentService.getStatus(experimentId)
                 != ExperimentService.ExperimentStatus.CREATED) {
-
             throw new IllegalStateException(
                     "Experiment must be in CREATED state before "
                             + "distributed execution can start."
             );
         }
 
-        AgentRecordResponse agent =
-                findCompatibleAgent(
-                        architecture,
-                        experiment.getBenchmarkConfig()
-                                .getConcurrency()
+        List<ExperimentArchitectureEntity> architectureTargets =
+                experimentService.getDistributedArchitectureTargets(
+                        experimentId
                 );
 
-        if (agent == null) {
-            throw new IllegalStateException(
-                    "No healthy READY agent is available for architecture "
-                            + architecture
-                            + " and concurrency "
-                            + experiment.getBenchmarkConfig()
-                                    .getConcurrency()
-            );
+        validateTargetCoverage(
+                experiment,
+                architectureTargets
+        );
+
+        int concurrency =
+                experiment.getBenchmarkConfig().getConcurrency();
+
+        for (ServerArchitecture architecture : experiment.getArchitectures()) {
+            AgentRecordResponse agent =
+                    findCompatibleAgent(
+                            architecture,
+                            concurrency
+                    );
+
+            if (agent == null) {
+                throw new IllegalStateException(
+                        "No healthy READY agent is available for architecture "
+                                + architecture
+                                + " and concurrency "
+                                + concurrency
+                );
+            }
         }
 
-        String jobId =
-                UUID.randomUUID().toString();
-
-        String runId =
-                UUID.randomUUID().toString();
-
-        BenchmarkJob job =
-                createBenchmarkJob(
+        List<BenchmarkJob> jobs =
+                createBenchmarkMatrix(
                         experiment,
-                        architecture,
-                        jobId,
-                        runId
+                        architectureTargets
                 );
 
         experimentService.markDistributedExperimentRunning(
                 experimentId
         );
 
+        int publishedJobs = 0;
+
         try {
+            for (BenchmarkJob job : jobs) {
+                distributedJobPublisher.publish(job);
+                publishedJobs++;
+            }
 
-            distributedJobPublisher.publish(job);
-
-            return job;
+            return List.copyOf(jobs);
 
         } catch (RuntimeException exception) {
 
-            /*
-             * Publishing failed after the experiment was marked RUNNING.
-             * Restore the lifecycle state so the experiment can be retried.
-             */
-            experimentService.markDistributedExperimentCreated(
-                    experimentId
-            );
+            if (publishedJobs == 0) {
+                /*
+                 * No job reached Kafka, so the experiment is still safe
+                 * to retry from its original lifecycle state.
+                 */
+                experimentService.markDistributedExperimentCreated(
+                        experimentId
+                );
+            } else {
+                /*
+                 * Some jobs are already in Kafka. Resetting to CREATED here
+                 * would permit a second matrix to be launched on top of the
+                 * first one. The experiment therefore remains RUNNING while
+                 * already-published jobs finish or fail.
+                 */
+                experimentService.recordDistributedPublicationFailure(
+                        experimentId,
+                        "Distributed job publication failed after "
+                                + publishedJobs
+                                + " job(s) were published: "
+                                + exception.getMessage()
+                );
+            }
 
             throw exception;
         }
     }
 
-    private AgentRecordResponse findCompatibleAgent(
-            ServerArchitecture architecture,
-            int concurrency
-    ) {
-
-        List<AgentRecordResponse> agents =
-                agentRegistryService.getAgents();
-
-        return agents.stream()
-                .filter(AgentRecordResponse::healthy)
-                .filter(agent ->
-                        agent.status() == AgentStatus.READY
-                )
-                .filter(agent ->
-                        agent.capability() != null
-                )
-                .filter(agent ->
-                        agent.capability()
-                                .supportedArchitectures()
-                                .contains(
-                                        architecture.name()
-                                )
-                )
-                .filter(agent ->
-                        concurrency
-                                <= agent.capability()
-                                        .maxConcurrency()
-                )
-                .findFirst()
-                .orElse(null);
-    }
-
-    private BenchmarkJob createBenchmarkJob(
+    private List<BenchmarkJob> createBenchmarkMatrix(
             Experiment experiment,
-            ServerArchitecture architecture,
-            String jobId,
-            String runId
+            List<ExperimentArchitectureEntity> architectureTargets
     ) {
-
         BenchmarkConfig config =
                 experiment.getBenchmarkConfig();
 
@@ -168,33 +151,149 @@ public class DistributedBenchmarkOrchestrator {
                 );
 
         Integer totalRequests =
-                config.getExecutionMode()
-                        == ExecutionMode.REQUESTS
+                config.getExecutionMode() == ExecutionMode.REQUESTS
                         ? config.getTotalRequests()
                         : null;
 
         Long measurementDurationMs =
-                config.getExecutionMode()
-                        == ExecutionMode.DURATION
+                config.getExecutionMode() == ExecutionMode.DURATION
                         ? config.getMeasurementDurationMs()
                         : null;
 
-        return new BenchmarkJob(
-                jobId,
-                experiment.getId(),
-                runId,
-                architecture.name(),
-                1,
-                config.getHost(),
-                config.getPort(),
-                executionMode,
-                totalRequests,
-                measurementDurationMs,
-                config.getConcurrency(),
-                config.getWarmupDurationMs(),
-                config.getRequestTimeoutMs(),
-                null
-        );
+        Integer threadPoolSize =
+                resolveThreadPoolSize(experiment);
+
+        List<BenchmarkJob> jobs = new ArrayList<>();
+
+        for (ServerArchitecture architecture : experiment.getArchitectures()) {
+
+            ExperimentArchitectureEntity target =
+                    findTarget(
+                            architectureTargets,
+                            architecture
+                    );
+
+            for (int repetition = 1;
+                    repetition <= experiment.getRepetitions();
+                    repetition++) {
+
+                jobs.add(
+                        new BenchmarkJob(
+                                UUID.randomUUID().toString(),
+                                experiment.getId(),
+                                UUID.randomUUID().toString(),
+                                architecture.name(),
+                                repetition,
+                                target.getTargetHost(),
+                                target.getTargetPort(),
+                                executionMode,
+                                totalRequests,
+                                measurementDurationMs,
+                                config.getConcurrency(),
+                                config.getWarmupDurationMs(),
+                                config.getRequestTimeoutMs(),
+                                architecture == ServerArchitecture.THREAD_POOL
+                                        ? threadPoolSize
+                                        : null
+                        )
+                );
+            }
+        }
+
+        return jobs;
+    }
+
+    private Integer resolveThreadPoolSize(
+            Experiment experiment
+    ) {
+        if (!experiment.getArchitectures().contains(
+                ServerArchitecture.THREAD_POOL
+        )) {
+            return null;
+        }
+
+        Integer threadPoolSize =
+                experimentService.getThreadPoolSize(
+                        experiment.getId()
+                );
+
+        if (threadPoolSize == null || threadPoolSize <= 0) {
+            throw new IllegalStateException(
+                    "Thread pool size must be greater than 0 when "
+                            + "THREAD_POOL is selected."
+            );
+        }
+
+        return threadPoolSize;
+    }
+
+    private void validateTargetCoverage(
+            Experiment experiment,
+            List<ExperimentArchitectureEntity> targets
+    ) {
+        if (targets == null || targets.isEmpty()) {
+            throw new IllegalStateException(
+                    "Distributed execution requires a target endpoint "
+                            + "for every selected architecture."
+            );
+        }
+
+        for (ServerArchitecture architecture : experiment.getArchitectures()) {
+            ExperimentArchitectureEntity target =
+                    findTarget(
+                            targets,
+                            architecture
+                    );
+
+            if (target.getTargetHost() == null
+                    || target.getTargetHost().isBlank()
+                    || target.getTargetPort() == null
+                    || target.getTargetPort() < 1
+                    || target.getTargetPort() > 65535) {
+                throw new IllegalStateException(
+                        "Distributed target is incomplete for architecture "
+                                + architecture
+                );
+            }
+        }
+    }
+
+    private ExperimentArchitectureEntity findTarget(
+            List<ExperimentArchitectureEntity> targets,
+            ServerArchitecture architecture
+    ) {
+        return targets.stream()
+                .filter(target -> architecture == target.getArchitecture())
+                .findFirst()
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "No distributed target is configured for architecture "
+                                        + architecture
+                        )
+                );
+    }
+
+    private AgentRecordResponse findCompatibleAgent(
+            ServerArchitecture architecture,
+            int concurrency
+    ) {
+        List<AgentRecordResponse> agents =
+                agentRegistryService.getAgents();
+
+        return agents.stream()
+                .filter(AgentRecordResponse::healthy)
+                .filter(agent -> agent.status() == AgentStatus.READY)
+                .filter(agent -> agent.capability() != null)
+                .filter(agent ->
+                        agent.capability()
+                                .supportedArchitectures()
+                                .contains(architecture.name())
+                )
+                .filter(agent ->
+                        concurrency <= agent.capability().maxConcurrency()
+                )
+                .findFirst()
+                .orElse(null);
     }
 
     private String toDistributedExecutionMode(
@@ -212,31 +311,10 @@ public class DistributedBenchmarkOrchestrator {
         };
     }
 
-    private void validateExperimentArchitecture(
-            Experiment experiment,
-            ServerArchitecture architecture
-    ) {
-
-        if (experiment.getArchitectures() == null
-                || !experiment.getArchitectures()
-                        .contains(architecture)) {
-
-            throw new IllegalArgumentException(
-                    "Architecture "
-                            + architecture
-                            + " is not selected for experiment "
-                            + experiment.getId()
-            );
-        }
-    }
-
     private void validateExperimentId(
             String experimentId
     ) {
-
-        if (experimentId == null
-                || experimentId.isBlank()) {
-
+        if (experimentId == null || experimentId.isBlank()) {
             throw new IllegalArgumentException(
                     "Experiment ID cannot be empty."
             );

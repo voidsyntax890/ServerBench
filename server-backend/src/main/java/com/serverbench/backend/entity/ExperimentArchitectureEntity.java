@@ -60,6 +60,32 @@ public class ExperimentArchitectureEntity {
     private ServerArchitecture architecture;
 
     // ================================================================
+    // DISTRIBUTED BENCHMARK TARGET
+    // ================================================================
+
+    /*
+     * These fields identify the independently provisioned target
+     * server instance associated with this architecture for a
+     * distributed experiment.
+     *
+     * They are intentionally stored at the architecture level because
+     * different architectures may run on different target endpoints.
+     *
+     * They remain nullable so existing local experiments and existing
+     * persisted architecture records remain compatible.
+     */
+    @Column(
+            name = "target_host",
+            length = 255
+    )
+    private String targetHost;
+
+    @Column(
+            name = "target_port"
+    )
+    private Integer targetPort;
+
+    // ================================================================
     // CONSTRUCTORS
     // ================================================================
 
@@ -69,9 +95,34 @@ public class ExperimentArchitectureEntity {
          */
     }
 
+    /*
+     * Existing constructor.
+     *
+     * Preserved so the existing experiment creation flow does not
+     * break while distributed target configuration remains optional
+     * at experiment creation time.
+     */
     public ExperimentArchitectureEntity(
             String experimentId,
             ServerArchitecture architecture
+    ) {
+
+        this(
+                experimentId,
+                architecture,
+                null,
+                null
+        );
+    }
+
+    /*
+     * Distributed-target constructor.
+     */
+    public ExperimentArchitectureEntity(
+            String experimentId,
+            ServerArchitecture architecture,
+            String targetHost,
+            Integer targetPort
     ) {
 
         this.experimentId =
@@ -79,6 +130,12 @@ public class ExperimentArchitectureEntity {
 
         this.architecture =
                 architecture;
+
+        this.targetHost =
+                targetHost;
+
+        this.targetPort =
+                targetPort;
     }
 
     // ================================================================
@@ -95,5 +152,13 @@ public class ExperimentArchitectureEntity {
 
     public ServerArchitecture getArchitecture() {
         return architecture;
+    }
+
+    public String getTargetHost() {
+        return targetHost;
+    }
+
+    public Integer getTargetPort() {
+        return targetPort;
     }
 }

@@ -2,6 +2,8 @@ package com.serverbench.backend.dto.request;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import com.serverbench.backend.validation.ValidExecutionConfiguration;
 import com.serverbench.engine.benchmark.ExecutionMode;
 import com.serverbench.engine.benchmark.ServerArchitecture;
@@ -113,6 +115,14 @@ public class ExperimentRequest {
      * ValidExecutionConfiguration.
      */
     private Integer threadPoolSize;
+
+    /*
+     * Optional at experiment creation time so existing local experiments
+     * remain valid. Required for distributed execution for every selected
+     * architecture.
+     */
+    @Valid
+    private List<DistributedBenchmarkTargetRequest> distributedTargets;
 
     public ExperimentRequest() {
     }
@@ -237,5 +247,15 @@ public class ExperimentRequest {
             Integer threadPoolSize
     ) {
         this.threadPoolSize = threadPoolSize;
+    }
+
+    public List<DistributedBenchmarkTargetRequest> getDistributedTargets() {
+        return distributedTargets;
+    }
+
+    public void setDistributedTargets(
+            List<DistributedBenchmarkTargetRequest> distributedTargets
+    ) {
+        this.distributedTargets = distributedTargets;
     }
 }

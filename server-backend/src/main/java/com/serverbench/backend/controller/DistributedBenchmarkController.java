@@ -1,15 +1,15 @@
 package com.serverbench.backend.controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.serverbench.backend.service.DistributedBenchmarkOrchestrator;
 import com.serverbench.distributed.contracts.BenchmarkJob;
-import com.serverbench.engine.benchmark.ServerArchitecture;
 
 @RestController
 @RequestMapping("/api/experiments")
@@ -24,16 +24,13 @@ public class DistributedBenchmarkController {
     }
 
     @PostMapping("/{experimentId}/distributed/start")
-    public ResponseEntity<BenchmarkJob> startDistributed(
-            @PathVariable("experimentId") String experimentId,
-            @RequestParam("architecture") ServerArchitecture architecture
+    public ResponseEntity<List<BenchmarkJob>> startDistributed(
+            @PathVariable("experimentId") String experimentId
     ) {
-        BenchmarkJob job =
-                orchestrator.start(
-                        experimentId,
-                        architecture
-                );
+        List<BenchmarkJob> jobs =
+                orchestrator.start(experimentId);
 
-        return ResponseEntity.ok(job);
+        return ResponseEntity.accepted()
+                .body(jobs);
     }
 }

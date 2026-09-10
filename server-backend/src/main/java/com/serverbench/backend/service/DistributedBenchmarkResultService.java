@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.serverbench.backend.entity.ExperimentArchitectureEntity;
 import com.serverbench.backend.entity.BenchmarkMetricsEntity;
 import com.serverbench.backend.entity.BenchmarkRunEntity;
 import com.serverbench.backend.entity.ExperimentEntity;
@@ -120,6 +121,12 @@ public class DistributedBenchmarkResultService {
                         event.architecture()
                 );
 
+        validateDistributedTarget(
+                event,
+                experiment.getId(),
+                architecture
+        );
+
         Status runStatus =
                 mapStatus(
                         event.status()
@@ -148,7 +155,9 @@ public class DistributedBenchmarkResultService {
                         finishedAt,
                         event.jobId(),
                         event.runId(),
-                        event.agentId()
+                        event.agentId(),
+                        event.targetHost(),
+                        event.targetPort()
                 );
 
         BenchmarkRunEntity savedRun =
@@ -380,6 +389,45 @@ public class DistributedBenchmarkResultService {
                 noResponseFailures,
                 otherIoFailures
         );
+    }
+
+    private void validateDistributedTarget(
+            BenchmarkResultEvent event,
+            String experimentId,
+            ServerArchitecture architecture
+    ) {
+        if (event.targetHost() == null || event.targetHost().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Distributed result target host cannot be empty."
+            );
+        }
+
+        if (event.targetPort() < 1 || event.targetPort() > 65535) {
+            throw new IllegalArgumentException(
+                    "Distributed result target port must be between 1 and 65535."
+            );
+        }
+
+        ExperimentArchitectureEntity target =
+                experimentArchitectureRepository
+                        .findByExperimentId(experimentId)
+                        .stream()
+                        .filter(entity -> architecture == entity.getArchitecture())
+                        .findFirst()
+                        .orElseThrow(
+                                () -> new IllegalArgumentException(
+                                        "No configured distributed target for architecture "
+                                                + architecture
+                                )
+                        );
+
+        if (!event.targetHost().equals(target.getTargetHost())
+                || event.targetPort() != target.getTargetPort()) {
+            throw new IllegalArgumentException(
+                    "Distributed result target does not match the configured target for architecture "
+                            + architecture
+            );
+        }
     }
 
     // ================================================================
