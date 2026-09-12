@@ -2,14 +2,18 @@ package com.serverbench.backend.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.serverbench.backend.dto.request.PerformanceExplanationRequest;
 import com.serverbench.backend.dto.response.PerformanceExplanationResponse;
 import com.serverbench.backend.service.ExperimentService;
 import com.serverbench.backend.service.PerformanceExplanationService;
 import com.serverbench.engine.benchmark.ExperimentResult;
-import com.serverbench.engine.benchmark.ExperimentRunResult;
 import com.serverbench.engine.benchmark.analysis.BottleneckFinding;
 import com.serverbench.engine.benchmark.analysis.BottleneckReport;
 import com.serverbench.engine.benchmark.analysis.RuleBasedBottleneckAnalyzer;
@@ -24,6 +28,7 @@ import jakarta.validation.Valid;
 public class PerformanceAnalysisController {
 
     private final ExperimentService experimentService;
+
     private final PerformanceExplanationService
             performanceExplanationService;
 
@@ -31,6 +36,7 @@ public class PerformanceAnalysisController {
             ExperimentService experimentService,
             PerformanceExplanationService performanceExplanationService
     ) {
+
         this.experimentService =
                 experimentService;
 
@@ -38,7 +44,9 @@ public class PerformanceAnalysisController {
                 performanceExplanationService;
     }
 
-    @PostMapping("/{experimentId}/analysis/explanation")
+    @PostMapping(
+            "/{experimentId}/analysis/explanation"
+    )
     public ResponseEntity<PerformanceExplanationResponse>
     explainFinding(
             @PathVariable("experimentId")
@@ -55,6 +63,7 @@ public class PerformanceAnalysisController {
                 );
 
         if (experimentResult == null) {
+
             throw new IllegalStateException(
                     "Experiment results are not available yet."
             );
@@ -62,12 +71,15 @@ public class PerformanceAnalysisController {
 
         BottleneckReport report =
                 new RuleBasedBottleneckAnalyzer()
-                        .analyze(experimentResult);
+                        .analyze(
+                                experimentResult
+                        );
 
         int findingIndex =
                 request.getFindingIndex();
 
         if (findingIndex >= report.getFindings().size()) {
+
             throw new IllegalArgumentException(
                     "Finding index is outside the available analysis findings."
             );
@@ -79,7 +91,10 @@ public class PerformanceAnalysisController {
 
         String explanation =
                 performanceExplanationService
-                        .explain(finding);
+                        .explain(
+                                finding,
+                                experimentResult
+                        );
 
         PerformanceExplanationResponse response =
                 new PerformanceExplanationResponse(

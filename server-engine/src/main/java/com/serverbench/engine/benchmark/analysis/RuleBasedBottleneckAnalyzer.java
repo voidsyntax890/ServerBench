@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.serverbench.engine.benchmark.ArchitectureComparison;
@@ -430,11 +431,84 @@ public class RuleBasedBottleneckAnalyzer {
                                 + format(p95)
                                 + ", p99LatencyMs="
                                 + format(p99),
-                        "Compare p95 and p99 across repeated runs and architectures "
-                                + "to determine whether the tail behavior is "
-                                + "consistently associated with this architecture."
+                        buildTailLatencyRecommendation(
+                                p50,
+                                p95,
+                                p99
+                        )
                 )
         );
+    }
+
+    private String buildTailLatencyRecommendation(
+            double p50,
+            double p95,
+            double p99
+    ) {
+
+        if (p50 <= 0.0) {
+
+            return "The median latency is at or below 0 ms while the "
+                    + "upper percentiles are higher. Use a longer or higher-volume "
+                    + "run to improve latency resolution, then compare p95 and p99 "
+                    + "across repeated runs before attributing the tail to the "
+                    + "server architecture.";
+        }
+
+        double medianToP95 =
+                p95 - p50;
+
+        double p95ToP99 =
+                p99 - p95;
+
+        double p99AboveMedianPercent =
+                ((p99 - p50) / p50) * 100.0;
+
+        if (p95ToP99 > medianToP95) {
+
+            return "The rarest requests contribute more tail expansion than "
+                    + "the p50-to-p95 range (p50="
+                    + format(p50)
+                    + " ms, p95="
+                    + format(p95)
+                    + " ms, p99="
+                    + format(p99)
+                    + " ms; p99 is "
+                    + format(p99AboveMedianPercent)
+                    + "% above p50). Investigate intermittent blocking, "
+                    + "connection handling, scheduling pauses, or resource "
+                    + "contention, and verify whether the same p99 pattern "
+                    + "persists across repeated runs.";
+        }
+
+        if (medianToP95 > 0.0) {
+
+            return "Latency rises substantially before the extreme tail "
+                    + "(p50="
+                    + format(p50)
+                    + " ms, p95="
+                    + format(p95)
+                    + " ms, p99="
+                    + format(p99)
+                    + " ms; p99 is "
+                    + format(p99AboveMedianPercent)
+                    + "% above p50). Investigate sustained queueing, "
+                    + "thread scheduling, connection contention, or workload "
+                    + "pressure, then compare the same percentile pattern "
+                    + "across architectures and repeated runs.";
+        }
+
+        return "The median and p95 latencies are effectively aligned while "
+                + "p99 is higher (p50="
+                + format(p50)
+                + " ms, p95="
+                + format(p95)
+                + " ms, p99="
+                + format(p99)
+                + " ms). Focus on the small set of slowest requests and "
+                + "investigate intermittent blocking or scheduling effects, "
+                + "then verify whether the p99 elevation repeats under the "
+                + "same workload.";
     }
 
     private void analyzeArchitectureComparison(
@@ -585,7 +659,7 @@ public class RuleBasedBottleneckAnalyzer {
     private String format(double value) {
 
         return String.format(
-                java.util.Locale.ROOT,
+                Locale.ROOT,
                 "%.4f",
                 value
         );

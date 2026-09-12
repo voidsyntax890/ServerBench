@@ -1,12 +1,12 @@
 package com.serverbench.engine.benchmark.analysis;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import com.serverbench.engine.benchmark.BenchmarkResult;
@@ -277,14 +277,282 @@ class RuleBasedBottleneckAnalyzerTest {
                         experimentResult
                 );
 
+        BottleneckFinding finding =
+                findTailLatencyFinding(report);
+
+        assertNotNull(finding);
+
         assertTrue(
-                report.getFindings()
-                        .stream()
-                        .anyMatch(
-                                finding ->
-                                        finding.getCategory()
-                                                == BottleneckCategory.TAIL_LATENCY
+                finding.getRecommendation()
+                        .contains(
+                                "rarest requests"
                         )
+        );
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "blocking"
+                        )
+        );
+    }
+
+    @Test
+    void shouldUseBroaderTailRecommendationWhenP50ToP95ExpansionDominates() {
+
+        ExperimentResult experimentResult =
+                new ExperimentResult(
+                        "experiment-1",
+                        "Broad Tail Experiment"
+                );
+
+        BenchmarkResult result =
+                createBenchmarkResult(
+                        "Thread Pool",
+                        100,
+                        100,
+                        0,
+                        1000.0,
+                        10.0,
+                        5.0,
+                        30.0,
+                        5.0,
+                        20.0,
+                        25.0
+                );
+
+        experimentResult.addRunResult(
+                completedRun(
+                        ServerArchitecture.THREAD_POOL,
+                        1,
+                        result,
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusSeconds(1)
+                )
+        );
+
+        BottleneckReport report =
+                analyzer.analyze(
+                        experimentResult
+                );
+
+        BottleneckFinding finding =
+                findTailLatencyFinding(report);
+
+        assertNotNull(finding);
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "queueing"
+                        )
+        );
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "workload"
+                        )
+        );
+    }
+
+    @Test
+    void shouldUseResolutionRecommendationWhenMedianLatencyIsZero() {
+
+        ExperimentResult experimentResult =
+                new ExperimentResult(
+                        "experiment-1",
+                        "Zero Median Experiment"
+                );
+
+        BenchmarkResult result =
+                createBenchmarkResult(
+                        "Single Threaded",
+                        100,
+                        100,
+                        0,
+                        1000.0,
+                        1.0,
+                        0.0,
+                        2.0,
+                        0.0,
+                        1.0,
+                        2.0
+                );
+
+        experimentResult.addRunResult(
+                completedRun(
+                        ServerArchitecture.SINGLE_THREADED,
+                        1,
+                        result,
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusSeconds(1)
+                )
+        );
+
+        BottleneckReport report =
+                analyzer.analyze(
+                        experimentResult
+                );
+
+        BottleneckFinding finding =
+                findTailLatencyFinding(report);
+
+        assertNotNull(finding);
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "longer"
+                        )
+        );
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "higher-volume"
+                        )
+        );
+    }
+
+    @Test
+    void shouldUseExtremeTailRecommendationWhenP95MatchesP50() {
+
+        ExperimentResult experimentResult =
+                new ExperimentResult(
+                        "experiment-1",
+                        "Extreme Tail Experiment"
+                );
+
+        BenchmarkResult result =
+                createBenchmarkResult(
+                        "Single Threaded",
+                        100,
+                        100,
+                        0,
+                        1000.0,
+                        5.0,
+                        5.0,
+                        12.0,
+                        5.0,
+                        5.0,
+                        12.0
+                );
+
+        experimentResult.addRunResult(
+                completedRun(
+                        ServerArchitecture.SINGLE_THREADED,
+                        1,
+                        result,
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusSeconds(1)
+                )
+        );
+
+        BottleneckReport report =
+                analyzer.analyze(
+                        experimentResult
+                );
+
+        BottleneckFinding finding =
+                findTailLatencyFinding(report);
+
+        assertNotNull(finding);
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "rarest requests"
+                        )
+        );
+
+        assertTrue(
+                finding.getRecommendation()
+                        .contains(
+                                "blocking"
+                        )
+        );
+    }
+
+    @Test
+    void shouldProduceDifferentRecommendationsForDifferentTailShapes() {
+
+        ExperimentResult extremeTailExperiment =
+                new ExperimentResult(
+                        "experiment-1",
+                        "Extreme Tail"
+                );
+
+        extremeTailExperiment.addRunResult(
+                completedRun(
+                        ServerArchitecture.VIRTUAL_THREAD,
+                        1,
+                        createBenchmarkResult(
+                                "Virtual Thread",
+                                100,
+                                100,
+                                0,
+                                1000.0,
+                                5.0,
+                                1.0,
+                                50.0,
+                                5.0,
+                                20.0,
+                                50.0
+                        ),
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusSeconds(1)
+                )
+        );
+
+        ExperimentResult broadTailExperiment =
+                new ExperimentResult(
+                        "experiment-2",
+                        "Broad Tail"
+                );
+
+        broadTailExperiment.addRunResult(
+                completedRun(
+                        ServerArchitecture.VIRTUAL_THREAD,
+                        1,
+                        createBenchmarkResult(
+                                "Virtual Thread",
+                                100,
+                                100,
+                                0,
+                                1000.0,
+                                10.0,
+                                5.0,
+                                30.0,
+                                5.0,
+                                20.0,
+                                25.0
+                        ),
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusSeconds(1)
+                )
+        );
+
+        BottleneckFinding extremeFinding =
+                findTailLatencyFinding(
+                        analyzer.analyze(
+                                extremeTailExperiment
+                        )
+                );
+
+        BottleneckFinding broadFinding =
+                findTailLatencyFinding(
+                        analyzer.analyze(
+                                broadTailExperiment
+                        )
+                );
+
+        assertNotNull(extremeFinding);
+        assertNotNull(broadFinding);
+
+        assertNotEquals(
+                extremeFinding.getRecommendation(),
+                broadFinding.getRecommendation()
         );
     }
 
@@ -386,6 +654,21 @@ class RuleBasedBottleneckAnalyzerTest {
         throw new AssertionError(
                 "Expected findings list to be immutable."
         );
+    }
+
+    private BottleneckFinding findTailLatencyFinding(
+            BottleneckReport report
+    ) {
+
+        return report.getFindings()
+                .stream()
+                .filter(
+                        finding ->
+                                finding.getCategory()
+                                        == BottleneckCategory.TAIL_LATENCY
+                )
+                .findFirst()
+                .orElse(null);
     }
 
     private ExperimentRunResult completedRun(
