@@ -20,11 +20,6 @@ const architectureNames = {
     VIRTUAL_THREAD: "Virtual Thread",
 };
 
-const TERMINAL_STATUSES = [
-    "COMPLETED",
-    "FAILED",
-    "CANCELLED",
-];
 
 function StatusBadge({ status }) {
     const safeStatus = status || "UNKNOWN";

@@ -456,9 +456,6 @@ function Results({
     const successfulRuns =
         result.successfulRuns ?? 0;
 
-    const failedRuns =
-        result.failedRuns ?? 0;
-
     const completionRate =
         totalRuns === 0
             ? 0

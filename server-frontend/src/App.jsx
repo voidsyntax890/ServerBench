@@ -196,13 +196,11 @@ function App() {
                  * Latest completed experiment
                  * becomes the Performance Overview.
                  */
-                if (
-                    completedExperiments.length >
-                        0 &&
-                    !currentExperimentId
-                ) {
+                if (completedExperiments.length > 0) {
                     setCurrentExperimentId(
-                        completedExperiments[0].id
+                        (currentId) =>
+                            currentId ||
+                            completedExperiments[0].id
                     );
                 }
 
@@ -254,7 +252,7 @@ function App() {
                 if (mounted) {
                     setDashboardError(
                         error.message ||
-                            "Unable to load dashboard data."
+                        "Unable to load dashboard data."
                     );
                 }
             } finally {
@@ -307,19 +305,19 @@ function App() {
         totalExperiments === 0
             ? 0
             : (
-                  (completedExperiments /
-                      totalExperiments) *
-                  100
-              ).toFixed(0);
+                (completedExperiments /
+                    totalExperiments) *
+                100
+            ).toFixed(0);
 
     const failureRate =
         totalExperiments === 0
             ? 0
             : (
-                  (failedExperiments /
-                      totalExperiments) *
-                  100
-              ).toFixed(0);
+                (failedExperiments /
+                    totalExperiments) *
+                100
+            ).toFixed(0);
 
     /*
      * Newest five experiments for dashboard table.
@@ -400,14 +398,14 @@ function App() {
                 (item) => ({
                     architecture:
                         architectureNames[
-                            item.architecture
+                        item.architecture
                         ] ||
                         item.architecture,
 
                     throughput:
                         Number(
                             item.averageThroughput ||
-                                0
+                            0
                         ),
                 })
             );
@@ -450,15 +448,15 @@ function App() {
                                 (item) => {
                                     const key =
                                         architectureKeys[
-                                            item
-                                                .architecture
+                                        item
+                                            .architecture
                                         ];
 
                                     if (key) {
                                         point[key] =
                                             Number(
                                                 item.averageThroughput ||
-                                                    0
+                                                0
                                             );
                                     }
                                 }
@@ -1314,7 +1312,7 @@ function App() {
 
                                             </tr>
                                         ) : recentExperiments.length ===
-                                          0 ? (
+                                            0 ? (
                                             <tr>
 
                                                 <td
@@ -1461,7 +1459,7 @@ function App() {
                                         Loading performance data...
                                     </div>
                                 ) : throughputData.length ===
-                                  0 ? (
+                                    0 ? (
                                     <div
                                         style={{
                                             height:
@@ -1529,11 +1527,11 @@ function App() {
                                                 formatter={(
                                                     value
                                                 ) => [
-                                                    `${Number(
-                                                        value
-                                                    ).toLocaleString()} req/s`,
-                                                    "Throughput",
-                                                ]}
+                                                        `${Number(
+                                                            value
+                                                        ).toLocaleString()} req/s`,
+                                                        "Throughput",
+                                                    ]}
                                             />
 
                                             <Bar
@@ -1610,7 +1608,7 @@ function App() {
                                         Loading trend data...
                                     </div>
                                 ) : trendData.length ===
-                                  0 ? (
+                                    0 ? (
                                     <div
                                         style={{
                                             height:
@@ -1679,11 +1677,11 @@ function App() {
                                                     value,
                                                     name
                                                 ) => [
-                                                    `${Number(
-                                                        value
-                                                    ).toLocaleString()} req/s`,
-                                                    name,
-                                                ]}
+                                                        `${Number(
+                                                            value
+                                                        ).toLocaleString()} req/s`,
+                                                        name,
+                                                    ]}
                                             />
 
                                             <Line
