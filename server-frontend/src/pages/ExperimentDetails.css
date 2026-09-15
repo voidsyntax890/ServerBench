@@ -373,33 +373,106 @@
    TARGET
 ================================================================ */
 
+.target-eyebrow {
+    margin-bottom: 4px;
+    color: #2563eb;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
 .target-box {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 132px;
+    min-height: 150px;
     padding: 22px;
-    background: #f8fafc;
-    border: 1px solid #eef2f7;
-    border-radius: 8px;
+    background:
+        linear-gradient(135deg,
+            #f8fafc 0%,
+            #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.target-box::after {
+    content: "";
+    position: absolute;
+    width: 140px;
+    height: 140px;
+    right: -58px;
+    top: -58px;
+    border-radius: 50%;
+    background: rgba(37, 99, 235, 0.055);
+    pointer-events: none;
+}
+
+.target-value-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.target-status-indicator {
+    width: 9px;
+    height: 9px;
+    min-width: 9px;
+    border-radius: 50%;
+    background: #64748b;
+    box-shadow: 0 0 0 4px #e2e8f0;
 }
 
 .target-value {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
     color: #172033;
     font-size: 23px;
     font-weight: 700;
+    line-height: 1.2;
     letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+    position: relative;
+    z-index: 1;
 }
 
-.target-value span {
+.target-host {
+    overflow-wrap: anywhere;
+}
+
+.target-separator {
     margin: 0 4px;
     color: #94a3b8;
+    font-weight: 500;
+}
+
+.target-port {
+    color: #334155;
 }
 
 .target-label {
-    margin-top: 7px;
+    margin-top: 10px;
+    color: #475569;
+    font-size: 10px;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+}
+
+.target-description {
+    margin-top: 4px;
     color: #94a3b8;
-    font-size: 9px;
+    font-size: 10px;
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
 }
 
 /* ================================================================

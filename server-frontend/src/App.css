@@ -918,3 +918,133 @@ a {
         color: #cbd5e1;
     }
 }
+
+
+/* ================================================================
+   LANDING <-> DASHBOARD TRANSITION
+================================================================ */
+
+.app-shell-entering {
+    animation:
+        serverbench-dashboard-enter
+        440ms
+        cubic-bezier(
+            0.16,
+            1,
+            0.3,
+            1
+        )
+        both;
+}
+
+.about-serverbench-button {
+    display: inline-flex;
+    align-items: center;
+
+    min-height: 30px;
+
+    padding:
+        7px 10px;
+
+    border:
+        1px solid
+        #e2e8f0;
+
+    border-radius: 7px;
+
+    background:
+        #ffffff;
+
+    color:
+        #64748b;
+
+    font-size: 9px;
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition:
+        color 180ms ease,
+        border-color 180ms ease,
+        background 180ms ease,
+        transform 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.about-serverbench-button::before {
+    content: "←";
+
+    margin-right: 6px;
+
+    color: #94a3b8;
+
+    transition:
+        transform 180ms ease,
+        color 180ms ease;
+}
+
+.about-serverbench-button:hover {
+    color: #2563eb;
+
+    border-color:
+        #bfdbfe;
+
+    background:
+        #f8fbff;
+
+    transform:
+        translateY(-1px);
+
+    box-shadow:
+        0 6px 16px
+        rgba(
+            15,
+            23,
+            42,
+            0.05
+        );
+}
+
+.about-serverbench-button:hover::before {
+    color: #2563eb;
+
+    transform:
+        translateX(-2px);
+}
+
+@keyframes serverbench-dashboard-enter {
+    from {
+        opacity: 0;
+        transform:
+            translateY(16px)
+            scale(0.992);
+    }
+
+    to {
+        opacity: 1;
+        transform:
+            translateY(0)
+            scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-shell-entering {
+        animation: none;
+    }
+
+    .about-serverbench-button {
+        transition: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .about-serverbench-button {
+        min-height: 32px;
+
+        padding:
+            7px 8px;
+
+        font-size: 8px;
+    }
+}

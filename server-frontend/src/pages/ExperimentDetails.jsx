@@ -56,8 +56,8 @@ function LifecycleStep({
                     {state === "completed"
                         ? "Completed"
                         : state === "active"
-                          ? "In progress"
-                          : "Pending"}
+                            ? "In progress"
+                            : "Pending"}
                 </span>
             </div>
         </div>
@@ -209,7 +209,7 @@ function ExperimentDetails({
                 if (mounted) {
                     setLoadError(
                         error.message ||
-                            "Unable to load experiment data."
+                        "Unable to load experiment data."
                     );
                 }
             } finally {
@@ -383,11 +383,11 @@ function ExperimentDetails({
 
                         if (
                             nextStatus ===
-                                "COMPLETED" ||
+                            "COMPLETED" ||
                             nextStatus ===
-                                "FAILED" ||
+                            "FAILED" ||
                             nextStatus ===
-                                "CANCELLED"
+                            "CANCELLED"
                         ) {
 
                             eventSource.close();
@@ -444,7 +444,7 @@ function ExperimentDetails({
             } catch (error) {
                 setStartError(
                     error.message ||
-                        "Unable to start experiment."
+                    "Unable to start experiment."
                 );
             } finally {
                 setIsStarting(false);
@@ -768,14 +768,13 @@ function ExperimentDetails({
                     />
 
                     <div
-                        className={`lifecycle-connector ${
-                            status === "RUNNING" ||
-                            status === "COMPLETED" ||
-                            status === "FAILED" ||
-                            status === "CANCELLED"
+                        className={`lifecycle-connector ${status === "RUNNING" ||
+                                status === "COMPLETED" ||
+                                status === "FAILED" ||
+                                status === "CANCELLED"
                                 ? "completed"
                                 : ""
-                        }`}
+                            }`}
                     />
 
                     <LifecycleStep
@@ -788,13 +787,12 @@ function ExperimentDetails({
                     />
 
                     <div
-                        className={`lifecycle-connector ${
-                            status === "COMPLETED" ||
-                            status === "FAILED" ||
-                            status === "CANCELLED"
+                        className={`lifecycle-connector ${status === "COMPLETED" ||
+                                status === "FAILED" ||
+                                status === "CANCELLED"
                                 ? "completed"
                                 : ""
-                        }`}
+                            }`}
                     />
 
                     <LifecycleStep
@@ -803,13 +801,13 @@ function ExperimentDetails({
                             status === "FAILED"
                                 ? "Failed"
                                 : status === "CANCELLED"
-                                  ? "Cancelled"
-                                  : "Completed"
+                                    ? "Cancelled"
+                                    : "Completed"
                         }
                         state={
                             status === "COMPLETED" ||
-                            status === "FAILED" ||
-                            status === "CANCELLED"
+                                status === "FAILED" ||
+                                status === "CANCELLED"
                                 ? "completed"
                                 : "pending"
                         }
@@ -876,7 +874,7 @@ function ExperimentDetails({
 
                             <strong>
                                 {experiment.measurementDurationMs !=
-                                null
+                                    null
                                     ? `${experiment.measurementDurationMs} ms`
                                     : "—"}
                             </strong>
@@ -889,7 +887,7 @@ function ExperimentDetails({
 
                             <strong>
                                 {experiment.totalRequests !=
-                                null
+                                    null
                                     ? experiment.totalRequests
                                     : "—"}
                             </strong>
@@ -935,20 +933,20 @@ function ExperimentDetails({
 
                         {experiment.threadPoolSize !=
                             null && (
-                            <div className="configuration-row">
+                                <div className="configuration-row">
 
-                                <span>
-                                    Thread Pool Size
-                                </span>
+                                    <span>
+                                        Thread Pool Size
+                                    </span>
 
-                                <strong>
-                                    {
-                                        experiment.threadPoolSize
-                                    }
-                                </strong>
+                                    <strong>
+                                        {
+                                            experiment.threadPoolSize
+                                        }
+                                    </strong>
 
-                            </div>
-                        )}
+                                </div>
+                            )}
 
                     </div>
 
@@ -1139,9 +1137,9 @@ function ExperimentDetails({
                             <strong>
                                 {currentArchitecture
                                     ? architectureNames[
-                                          currentArchitecture
-                                      ] ||
-                                      currentArchitecture
+                                    currentArchitecture
+                                    ] ||
+                                    currentArchitecture
                                     : "—"}
                             </strong>
 
@@ -1183,10 +1181,10 @@ function ExperimentDetails({
                                 {totalRuns == null
                                     ? "—"
                                     : Math.max(
-                                          0,
-                                          totalRuns -
-                                              completedRuns
-                                      )}
+                                        0,
+                                        totalRuns -
+                                        completedRuns
+                                    )}
                             </strong>
 
                         </div>
@@ -1300,12 +1298,16 @@ function ExperimentDetails({
 
                         <div>
 
+                            <div className="target-eyebrow">
+                                Benchmark Endpoint
+                            </div>
+
                             <h2>
-                                Benchmark Target
+                                Target Server
                             </h2>
 
                             <p>
-                                Server endpoint used by this experiment.
+                                The server endpoint that receives the workload generated by this experiment.
                             </p>
 
                         </div>
@@ -1314,20 +1316,37 @@ function ExperimentDetails({
 
                     <div className="target-box">
 
-                        <div className="target-value">
+                        <div className="target-value-row">
 
-                            {experiment.host}
+                            <span
+                                className="target-status-indicator"
+                                aria-hidden="true"
+                            />
 
-                            <span>
-                                :
-                            </span>
+                            <div className="target-value">
 
-                            {experiment.port}
+                                <span className="target-host">
+                                    {experiment.host}
+                                </span>
+
+                                <span className="target-separator">
+                                    :
+                                </span>
+
+                                <span className="target-port">
+                                    {experiment.port}
+                                </span>
+
+                            </div>
 
                         </div>
 
                         <div className="target-label">
-                            Benchmark server
+                            Benchmark target endpoint
+                        </div>
+
+                        <div className="target-description">
+                            Requests for this experiment are sent to this host and port.
                         </div>
 
                     </div>
@@ -1378,7 +1397,7 @@ function ExperimentDetails({
                                         <span>
                                             {
                                                 architectureNames[
-                                                    architecture
+                                                architecture
                                                 ] ||
                                                 architecture
                                             }

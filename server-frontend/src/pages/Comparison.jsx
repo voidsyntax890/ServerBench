@@ -78,9 +78,8 @@ function ComparisonMetric({
 }) {
     return (
         <div
-            className={`comparison-metric ${
-                winner ? "winner" : ""
-            }`}
+            className={`comparison-metric ${winner ? "winner" : ""
+                }`}
         >
             <span className="comparison-metric-label">
                 {label}
@@ -154,7 +153,7 @@ function Comparison({
 
                     setLoadError(
                         error.message ||
-                            "Unable to load comparison data."
+                        "Unable to load comparison data."
                     );
                 }
             } finally {
@@ -270,14 +269,14 @@ function Comparison({
                 (item) => ({
                     architecture:
                         architectureShortNames[
-                            item.architecture
+                        item.architecture
                         ] ||
                         item.architecture,
 
                     throughput:
                         Number(
                             item.averageThroughput ||
-                                0
+                            0
                         ),
                 })
             );
@@ -289,20 +288,33 @@ function Comparison({
                 (item) => ({
                     architecture:
                         architectureShortNames[
-                            item.architecture
+                        item.architecture
                         ] ||
                         item.architecture,
 
                     successRate:
                         Number(
-                            item.averageSuccessRate ||
-                                0
+                            item.averageSuccessRate
                         ),
 
                     errorRate:
                         Number(
-                            item.averageErrorRate ||
-                                0
+                            item.averageErrorRate
+                        ),
+
+                    successfulRuns:
+                        Number(
+                            item.successfulRuns
+                        ),
+
+                    failedRuns:
+                        Number(
+                            item.failedRuns
+                        ),
+
+                    totalRuns:
+                        Number(
+                            item.totalRuns
                         ),
                 })
             );
@@ -520,7 +532,7 @@ function Comparison({
                                     <div className="leader-name">
                                         {
                                             architectureNames[
-                                                item.architecture
+                                            item.architecture
                                             ] ||
                                             item.architecture
                                         }
@@ -649,7 +661,7 @@ function Comparison({
                                             <strong>
                                                 {
                                                     architectureNames[
-                                                        item.architecture
+                                                    item.architecture
                                                     ] ||
                                                     item.architecture
                                                 }
@@ -659,7 +671,7 @@ function Comparison({
                                         <td
                                             className={
                                                 item.architecture ===
-                                                throughputWinner
+                                                    throughputWinner
                                                     ? "best-cell"
                                                     : ""
                                             }
@@ -675,7 +687,7 @@ function Comparison({
                                         <td
                                             className={
                                                 item.architecture ===
-                                                averageLatencyWinner
+                                                    averageLatencyWinner
                                                     ? "best-cell"
                                                     : ""
                                             }
@@ -690,7 +702,7 @@ function Comparison({
                                         <td
                                             className={
                                                 item.architecture ===
-                                                p95Winner
+                                                    p95Winner
                                                     ? "best-cell"
                                                     : ""
                                             }
@@ -705,7 +717,7 @@ function Comparison({
                                         <td
                                             className={
                                                 item.architecture ===
-                                                p99Winner
+                                                    p99Winner
                                                     ? "best-cell"
                                                     : ""
                                             }
@@ -720,7 +732,7 @@ function Comparison({
                                         <td
                                             className={
                                                 item.architecture ===
-                                                successRateWinner
+                                                    successRateWinner
                                                     ? "best-cell"
                                                     : ""
                                             }
@@ -861,8 +873,8 @@ function Comparison({
             </section>
 
             {/* ==================================================
-                RELIABILITY
-            ================================================== */}
+                        RELIABILITY
+                    ================================================== */}
 
             <section className="comparison-card">
 
@@ -875,135 +887,194 @@ function Comparison({
                         </h2>
 
                         <p>
-                            Measured success and error rates for
-                            each architecture in this experiment.
+                            Execution reliability across the selected
+                            server architectures.
                         </p>
 
                     </div>
 
                     <span className="comparison-unit">
-                        percentage
+                        success / failure
                     </span>
 
                 </div>
 
-                <div className="comparison-chart">
+                <div className="reliability-overview">
 
-                    <ResponsiveContainer
-                        width="100%"
-                        height={360}
-                    >
+                    <div className="reliability-intro">
 
-                        <BarChart
-                            data={reliabilityChartData}
-                            margin={{
-                                top: 35,
-                                right: 20,
-                                left: 10,
-                                bottom: 20,
-                            }}
+                        <strong>
+                            What these results mean
+                        </strong>
+
+                        <span>
+                            Success and error rates summarize the measured
+                            benchmark outcome, while the run counts show
+                            how many architecture runs completed successfully
+                            or failed.
+                        </span>
+
+                    </div>
+
+                    <div className="reliability-chart">
+
+                        <ResponsiveContainer
+                            width="100%"
+                            height={320}
                         >
 
-                            <CartesianGrid
-                                stroke="#eef2f7"
-                                vertical={false}
-                            />
-
-                            <XAxis
-                                dataKey="architecture"
-                                tick={{
-                                    fill: "#64748b",
-                                    fontSize: 11,
+                            <BarChart
+                                data={
+                                    reliabilityChartData
+                                }
+                                margin={{
+                                    top: 32,
+                                    right: 20,
+                                    left: 10,
+                                    bottom: 20,
                                 }}
-                                axisLine={{
-                                    stroke: "#dbe2ea",
-                                }}
-                                tickLine={false}
-                            />
+                            >
 
-                            <YAxis
-                                domain={[
-                                    0,
-                                    (dataMax) =>
-                                        Math.max(
-                                            1,
-                                            Math.ceil(
-                                                Number(dataMax) / 10
-                                            ) * 10
-                                        ),
-                                ]}
-                                tick={{
-                                    fill: "#64748b",
-                                    fontSize: 11,
-                                }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
+                                <CartesianGrid
+                                    stroke="#eef2f7"
+                                    vertical={false}
+                                />
 
-                            <Tooltip
-                                formatter={(value, name) => [
-                                    `${Number(value).toFixed(2)}%`,
-                                    name,
-                                ]}
-                            />
+                                <XAxis
+                                    dataKey="architecture"
+                                    tick={{
+                                        fill: "#64748b",
+                                        fontSize: 11,
+                                    }}
+                                    axisLine={{
+                                        stroke: "#dbe2ea",
+                                    }}
+                                    tickLine={false}
+                                />
 
-                            <Legend />
+                                <YAxis
+                                    domain={[
+                                        0,
+                                        100,
+                                    ]}
+                                    tick={{
+                                        fill: "#64748b",
+                                        fontSize: 11,
+                                    }}
+                                    tickFormatter={(
+                                        value
+                                    ) =>
+                                        `${value}%`
+                                    }
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
 
-                            <Bar
-                                dataKey="successRate"
-                                name="Success Rate"
-                                fill="#16a34a"
-                                radius={[
-                                    4,
-                                    4,
-                                    0,
-                                    0,
-                                ]}
-                                barSize={32}
-                                label={{
-                                    position: "top",
-                                    formatter: (value) =>
-                                        `${Number(value).toFixed(2)}%`,
-                                    fontSize: 10,
-                                }}
-                            />
+                                <Tooltip
+                                    formatter={(
+                                        value,
+                                        name
+                                    ) => [
+                                            `${Number(
+                                                value
+                                            ).toFixed(2)}%`,
+                                            name,
+                                        ]}
+                                    contentStyle={{
+                                        border:
+                                            "1px solid #e5e7eb",
+                                        borderRadius:
+                                            "8px",
+                                        boxShadow:
+                                            "0 4px 16px rgba(15, 23, 42, 0.08)",
+                                    }}
+                                />
 
-                            <Bar
-                                dataKey="errorRate"
-                                name="Error Rate"
-                                fill="#dc2626"
-                                radius={[
-                                    4,
-                                    4,
-                                    0,
-                                    0,
-                                ]}
-                                barSize={32}
-                                label={{
-                                    position: "top",
-                                    formatter: (value) =>
-                                        Number(value) === 0
-                                            ? "0%"
-                                            : `${Number(value).toFixed(2)}%`,
-                                    fontSize: 10,
-                                }}
-                            />
+                                <Legend />
 
-                        </BarChart>
+                                <Bar
+                                    dataKey="successRate"
+                                    name="Success Rate"
+                                    fill="#16a34a"
+                                    radius={[
+                                        4,
+                                        4,
+                                        0,
+                                        0,
+                                    ]}
+                                    barSize={34}
+                                    label={{
+                                        position:
+                                            "top",
+                                        formatter: (
+                                            value
+                                        ) =>
+                                            `${Number(
+                                                value
+                                            ).toFixed(
+                                                2
+                                            )}%`,
+                                        fontSize: 9,
+                                    }}
+                                />
 
-                    </ResponsiveContainer>
+                                <Bar
+                                    dataKey="errorRate"
+                                    name="Error Rate"
+                                    fill="#dc2626"
+                                    radius={[
+                                        4,
+                                        4,
+                                        0,
+                                        0,
+                                    ]}
+                                    barSize={34}
+                                    label={{
+                                        position:
+                                            "top",
+                                        formatter: (
+                                            value
+                                        ) =>
+                                            Number(
+                                                value
+                                            ) ===
+                                                0
+                                                ? "0%"
+                                                : `${Number(
+                                                    value
+                                                ).toFixed(
+                                                    2
+                                                )}%`,
+                                        fontSize: 9,
+                                    }}
+                                />
+
+                            </BarChart>
+
+                        </ResponsiveContainer>
+
+                    </div>
 
                 </div>
 
                 {/* ==================================================
-                    RELIABILITY DATA TABLE
-                ================================================== */}
+                            RELIABILITY DATA TABLE
+                        ================================================== */}
 
                 <div className="reliability-data-table">
 
                     <div className="reliability-table-header">
+
                         <span>
                             Architecture
+                        </span>
+
+                        <span>
+                            Successful Runs
+                        </span>
+
+                        <span>
+                            Failed Runs
                         </span>
 
                         <span>
@@ -1014,65 +1085,104 @@ function Comparison({
                             Error Rate
                         </span>
 
-                        <span>
-                            Successful Runs
-                        </span>
-
-                        <span>
-                            Failed Runs
-                        </span>
                     </div>
 
-                    {comparisons.map((item) => (
+                    {comparisons.map(
+                        (item) => {
 
-                        <div
-                            className="reliability-table-row"
-                            key={item.architecture}
-                        >
+                            const successfulRuns =
+                                Number(
+                                    item.successfulRuns
+                                );
 
-                            <strong>
-                                {
-                                    architectureNames[
+                            const failedRuns =
+                                Number(
+                                    item.failedRuns
+                                );
+
+                            const totalRuns =
+                                Number(
+                                    item.totalRuns
+                                );
+
+                            const hasFailures =
+                                failedRuns > 0;
+
+                            return (
+                                <div
+                                    className="reliability-table-row"
+                                    key={
                                         item.architecture
-                                    ] || item.architecture
-                                }
-                            </strong>
+                                    }
+                                >
 
-                            <span>
-                                {
-                                    formatPercentage(
-                                        item.averageSuccessRate
-                                    )
-                                }
-                            </span>
+                                    <div className="reliability-architecture">
 
-                            <span
-                                className={
-                                    Number(
-                                        item.averageErrorRate
-                                    ) > 0
-                                        ? "reliability-error"
-                                        : ""
-                                }
-                            >
-                                {
-                                    formatPercentage(
-                                        item.averageErrorRate
-                                    )
-                                }
-                            </span>
+                                        <strong>
+                                            {
+                                                architectureNames[
+                                                item.architecture
+                                                ] ||
+                                                item.architecture
+                                            }
+                                        </strong>
 
-                            <span>
-                                {item.successfulRuns}
-                            </span>
+                                        <span
+                                            className={
+                                                hasFailures
+                                                    ? "reliability-status reliability-status-warning"
+                                                    : "reliability-status reliability-status-good"
+                                            }
+                                        >
+                                            {hasFailures
+                                                ? "Failures recorded"
+                                                : "No failed runs"}
+                                        </span>
 
-                            <span>
-                                {item.failedRuns}
-                            </span>
+                                    </div>
 
-                        </div>
+                                    <span className="reliability-success-count">
+                                        {successfulRuns}
+                                        {" / "}
+                                        {totalRuns}
+                                    </span>
 
-                    ))}
+                                    <span
+                                        className={
+                                            hasFailures
+                                                ? "reliability-error reliability-failed-count"
+                                                : "reliability-failed-count"
+                                        }
+                                    >
+                                        {failedRuns}
+                                    </span>
+
+                                    <span className="reliability-rate">
+                                        {
+                                            formatPercentage(
+                                                item.averageSuccessRate
+                                            )
+                                        }
+                                    </span>
+
+                                    <span
+                                        className={
+                                            hasFailures
+                                                ? "reliability-error reliability-rate"
+                                                : "reliability-rate"
+                                        }
+                                    >
+                                        {
+                                            formatPercentage(
+                                                item.averageErrorRate
+                                            )
+                                        }
+                                    </span>
+
+                                </div>
+                            );
+                        }
+                    )}
 
                 </div>
 
@@ -1109,8 +1219,8 @@ function Comparison({
                             highestThroughput === null
                                 ? "—"
                                 : `${formatNumber(
-                                      highestThroughput
-                                  )} req/s`
+                                    highestThroughput
+                                )} req/s`
                         }
                         winner={
                             Boolean(
@@ -1120,9 +1230,9 @@ function Comparison({
                         helper={
                             throughputWinner
                                 ? architectureNames[
-                                      throughputWinner
-                                  ] ||
-                                  throughputWinner
+                                throughputWinner
+                                ] ||
+                                throughputWinner
                                 : null
                         }
                     />
@@ -1133,8 +1243,8 @@ function Comparison({
                             highestSuccessRate === null
                                 ? "—"
                                 : formatPercentage(
-                                      highestSuccessRate
-                                  )
+                                    highestSuccessRate
+                                )
                         }
                         winner={
                             Boolean(
@@ -1144,9 +1254,9 @@ function Comparison({
                         helper={
                             successRateWinner
                                 ? architectureNames[
-                                      successRateWinner
-                                  ] ||
-                                  successRateWinner
+                                successRateWinner
+                                ] ||
+                                successRateWinner
                                 : null
                         }
                     />
@@ -1157,8 +1267,8 @@ function Comparison({
                             lowestAverageLatency === null
                                 ? "—"
                                 : formatLatency(
-                                      lowestAverageLatency
-                                  )
+                                    lowestAverageLatency
+                                )
                         }
                         winner={
                             Boolean(
@@ -1168,9 +1278,9 @@ function Comparison({
                         helper={
                             averageLatencyWinner
                                 ? architectureNames[
-                                      averageLatencyWinner
-                                  ] ||
-                                  averageLatencyWinner
+                                averageLatencyWinner
+                                ] ||
+                                averageLatencyWinner
                                 : null
                         }
                     />
@@ -1181,8 +1291,8 @@ function Comparison({
                             lowestP95 === null
                                 ? "—"
                                 : formatLatency(
-                                      lowestP95
-                                  )
+                                    lowestP95
+                                )
                         }
                         winner={
                             Boolean(
@@ -1192,9 +1302,9 @@ function Comparison({
                         helper={
                             p95Winner
                                 ? architectureNames[
-                                      p95Winner
-                                  ] ||
-                                  p95Winner
+                                p95Winner
+                                ] ||
+                                p95Winner
                                 : null
                         }
                     />
@@ -1205,8 +1315,8 @@ function Comparison({
                             lowestP99 === null
                                 ? "—"
                                 : formatLatency(
-                                      lowestP99
-                                  )
+                                    lowestP99
+                                )
                         }
                         winner={
                             Boolean(
@@ -1216,9 +1326,9 @@ function Comparison({
                         helper={
                             p99Winner
                                 ? architectureNames[
-                                      p99Winner
-                                  ] ||
-                                  p99Winner
+                                p99Winner
+                                ] ||
+                                p99Winner
                                 : null
                         }
                     />

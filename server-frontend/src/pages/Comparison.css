@@ -419,6 +419,7 @@
 }
 
 @media (max-width: 520px) {
+
     .comparison-header h1 {
         font-size: 25px;
     }
@@ -426,113 +427,238 @@
     .comparison-card-header {
         flex-direction: column;
     }
+}
 
-    /* ================================================================
+/* ================================================================
    DATA STATES
 ================================================================ */
 
-    .comparison-state {
-        min-height: 260px;
+.comparison-state {
+    min-height: 260px;
 
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 
-        gap: 8px;
+    gap: 8px;
 
-        text-align: center;
+    text-align: center;
 
-        color: #64748b;
-    }
+    color: #64748b;
+}
 
-    .comparison-state strong {
-        color: #334155;
-        font-size: 15px;
-    }
+.comparison-state strong {
+    color: #334155;
+    font-size: 15px;
+}
 
-    .comparison-state span {
-        color: #94a3b8;
-        font-size: 12px;
-    }
+.comparison-state span {
+    color: #94a3b8;
+    font-size: 12px;
+}
 
-    .comparison-state-error strong {
-        color: #dc2626;
-    }
+.comparison-state-error strong {
+    color: #dc2626;
+}
 
-    .comparison-state .comparison-back-button {
-        margin-top: 12px;
-    }
+.comparison-state .comparison-back-button {
+    margin-top: 12px;
+}
 
-    /* ================================================================
+/* ================================================================
+   RELIABILITY
+================================================================ */
+
+.reliability-overview {
+    display: grid;
+
+    grid-template-columns:
+        minmax(220px, 0.32fr) minmax(0, 1fr);
+
+    gap: 24px;
+
+    align-items: stretch;
+}
+
+.reliability-intro {
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+
+    padding: 18px;
+
+    background: #f8fafc;
+
+    border: 1px solid #eef2f7;
+    border-radius: 8px;
+}
+
+.reliability-intro strong {
+    color: #172033;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.reliability-intro span {
+    margin-top: 8px;
+
+    color: #94a3b8;
+
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+.reliability-chart {
+    width: 100%;
+    min-width: 0;
+}
+
+/* ================================================================
    RELIABILITY DATA TABLE
 ================================================================ */
 
-    .reliability-data-table {
-        margin-top: 24px;
+.reliability-data-table {
+    margin-top: 24px;
 
-        border-top: 1px solid #e5e7eb;
+    overflow: hidden;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.reliability-table-header,
+.reliability-table-row {
+    display: grid;
+
+    grid-template-columns:
+        2fr 1.2fr 1fr 1.1fr 1fr;
+
+    align-items: center;
+
+    gap: 16px;
+
+    padding: 13px 16px;
+}
+
+.reliability-table-header {
+    background: #f8fafc;
+
+    color: #64748b;
+
+    font-size: 9px;
+    font-weight: 700;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.04em;
+}
+
+.reliability-table-row {
+    min-height: 64px;
+
+    border-top: 1px solid #eef2f7;
+
+    color: #475569;
+
+    font-size: 11px;
+}
+
+.reliability-table-row strong {
+    color: #334155;
+
+    font-size: 11px;
+}
+
+.reliability-table-row span {
+    font-variant-numeric: tabular-nums;
+}
+
+.reliability-architecture {
+    display: flex;
+    flex-direction: column;
+
+    gap: 5px;
+
+    min-width: 0;
+}
+
+.reliability-status {
+    width: fit-content;
+
+    padding: 3px 6px;
+
+    border-radius: 5px;
+
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.reliability-status-good {
+    background: #f0fdf4;
+
+    color: #15803d;
+}
+
+.reliability-status-warning {
+    background: #fff7ed;
+
+    color: #c2410c;
+}
+
+.reliability-success-count {
+    color: #334155;
+
+    font-weight: 600;
+}
+
+.reliability-failed-count {
+    color: #64748b;
+}
+
+.reliability-rate {
+    color: #334155;
+
+    font-weight: 600;
+}
+
+.reliability-error {
+    color: #dc2626 !important;
+
+    font-weight: 700;
+}
+
+/* ================================================================
+   RELIABILITY RESPONSIVE
+================================================================ */
+
+@media (max-width: 900px) {
+
+    .reliability-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .reliability-data-table {
+        overflow-x: auto;
     }
 
     .reliability-table-header,
     .reliability-table-row {
-        display: grid;
+        min-width: 760px;
+    }
+}
 
-        grid-template-columns:
-            2fr 1fr 1fr 1fr 1fr;
+@media (max-width: 520px) {
 
-        align-items: center;
-
-        gap: 16px;
-
-        padding: 14px 16px;
+    .reliability-intro {
+        padding: 15px;
     }
 
-    .reliability-table-header {
-        font-size: 11px;
-
-        font-weight: 600;
-
-        color: #64748b;
-
-        text-transform: uppercase;
-
-        letter-spacing: 0.04em;
-
-        background: #f8fafc;
-    }
-
+    .reliability-table-header,
     .reliability-table-row {
-        font-size: 12px;
-
-        color: #475569;
-
-        border-top: 1px solid #eef2f7;
-    }
-
-    .reliability-table-row strong {
-        color: #334155;
-    }
-
-    .reliability-table-row span {
-        font-variant-numeric: tabular-nums;
-    }
-
-    .reliability-error {
-        color: #dc2626 !important;
-
-        font-weight: 600;
-    }
-
-    @media (max-width: 900px) {
-
-        .reliability-data-table {
-            overflow-x: auto;
-        }
-
-        .reliability-table-header,
-        .reliability-table-row {
-            min-width: 680px;
-        }
+        padding:
+            12px 14px;
     }
 }

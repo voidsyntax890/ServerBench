@@ -11,6 +11,7 @@ import Comparison from "./pages/Comparison";
 import History from "./pages/History";
 import Experiments from "./pages/Experiments";
 import Settings from "./pages/Settings";
+import Landing from "./pages/Landing";
 
 import {
     getExperiments,
@@ -115,7 +116,10 @@ function App() {
      */
 
     const [currentPage, setCurrentPage] =
-        useState("dashboard");
+        useState("landing");
+
+    const [pageTransition, setPageTransition] =
+        useState("idle");
 
     const [currentExperimentId, setCurrentExperimentId] =
         useState(null);
@@ -478,6 +482,31 @@ function App() {
 
     const openDashboard = () => {
         setCurrentPage("dashboard");
+        setPageTransition("idle");
+    };
+
+    const enterDashboardFromLanding = () => {
+        setPageTransition("dashboard-exit");
+
+        window.setTimeout(() => {
+            setCurrentPage("dashboard");
+            setPageTransition("dashboard-enter");
+
+            window.setTimeout(() => {
+                setPageTransition("idle");
+            }, 440);
+        }, 320);
+    };
+
+    const openLanding = () => {
+        setPageTransition("landing-exit");
+        window.setTimeout(() => {
+            setCurrentPage("landing");
+            setPageTransition("landing-enter");
+            window.setTimeout(() => {
+                setPageTransition("idle");
+            }, 420);
+        }, 320);
     };
 
     const openExperiments = () => {
@@ -559,9 +588,21 @@ function App() {
 
     /*
      * ============================================================
-     * NEW EXPERIMENT
+     * LANDING / ABOUT
      * ============================================================
      */
+
+    if (
+        currentPage ===
+        "landing"
+    ) {
+        return (
+            <Landing
+                transitionState={pageTransition}
+                onEnterDashboard={enterDashboardFromLanding}
+            />
+        );
+    }
 
     if (
         currentPage ===
@@ -835,7 +876,7 @@ function App() {
      */
 
     return (
-        <div className="app-shell">
+        <div className={`app-shell ${pageTransition === "dashboard-enter" ? "app-shell-entering" : ""}`}>
 
             {/* ==================================================
                 SIDEBAR
@@ -1012,6 +1053,14 @@ function App() {
                     </button>
 
                     <div className="topbar-actions">
+
+                        <button
+                            className="about-serverbench-button"
+                            type="button"
+                            onClick={openLanding}
+                        >
+                            About ServerBench
+                        </button>
 
                         <button
                             className="icon-button"
