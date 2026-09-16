@@ -668,3 +668,571 @@
         background: #f0fdf4;
     }
 }
+/* ========================================================================== 
+   SERVERBENCH VISUAL REFINEMENT LAYER
+   Keeps the existing layout/functionality intact while adding subtle,
+   performance-friendly motion, depth, focus states, and visual hierarchy.
+   ========================================================================== */
+
+:root {
+    --sb-blue: #2563eb;
+    --sb-blue-deep: #1d4ed8;
+    --sb-blue-soft: #eff6ff;
+    --sb-ink: #172033;
+    --sb-muted: #64748b;
+    --sb-border: #e2e8f0;
+    --sb-surface: #ffffff;
+    --sb-shadow-sm: 0 10px 30px rgba(15, 23, 42, 0.045);
+    --sb-shadow-md: 0 18px 50px rgba(15, 23, 42, 0.07);
+}
+
+.experiment-page {
+    position: relative;
+    isolation: isolate;
+    animation: sb-page-in 0.45s ease both;
+}
+
+.experiment-page::before,
+.experiment-page::after {
+    content: "";
+    position: fixed;
+    pointer-events: none;
+    z-index: -1;
+    border-radius: 999px;
+    filter: blur(2px);
+}
+
+.experiment-page::before {
+    width: 320px;
+    height: 320px;
+    top: 5vh;
+    right: -180px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.10), transparent 68%);
+    animation: sb-float-a 9s ease-in-out infinite;
+}
+
+.experiment-page::after {
+    width: 270px;
+    height: 270px;
+    bottom: 8vh;
+    left: -170px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.075), transparent 68%);
+    animation: sb-float-b 11s ease-in-out infinite;
+}
+
+.experiment-header {
+    position: relative;
+}
+
+.experiment-header-left > div:last-child {
+    animation: sb-content-in 0.55s 0.06s ease both;
+}
+
+.back-button {
+    position: relative;
+    transition:
+        color 0.18s ease,
+        transform 0.18s ease;
+}
+
+.back-button::after {
+    content: "";
+    position: absolute;
+    left: 24px;
+    right: 0;
+    bottom: -4px;
+    height: 1px;
+    transform: scaleX(0);
+    transform-origin: left;
+    background: currentColor;
+    transition: transform 0.2s ease;
+    opacity: 0.45;
+}
+
+.back-button:hover {
+    transform: translateX(-2px);
+}
+
+.back-button:hover::after {
+    transform: scaleX(1);
+}
+
+.experiment-header h1 {
+    background: linear-gradient(110deg, #172033 0%, #1e3a8a 55%, #334155 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.experiment-header p {
+    max-width: 620px;
+}
+
+.form-section {
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--sb-shadow-sm);
+    transition:
+        border-color 0.22s ease,
+        box-shadow 0.22s ease,
+        transform 0.22s ease;
+    animation: sb-section-in 0.55s ease both;
+}
+
+.form-section:nth-child(1) { animation-delay: 0.08s; }
+.form-section:nth-child(2) { animation-delay: 0.14s; }
+.form-section:nth-child(3) { animation-delay: 0.20s; }
+.form-section:nth-child(4) { animation-delay: 0.26s; }
+
+.form-section::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 18px;
+    bottom: 18px;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0), rgba(37, 99, 235, 0.42), rgba(37, 99, 235, 0));
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
+
+.form-section:hover {
+    border-color: #d7e2f0;
+    box-shadow: var(--sb-shadow-md);
+    transform: translateY(-1px);
+}
+
+.form-section:hover::before {
+    opacity: 1;
+}
+
+.section-heading {
+    position: relative;
+}
+
+.section-heading::after {
+    content: "";
+    width: 34px;
+    height: 2px;
+    position: absolute;
+    left: 0;
+    bottom: -8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--sb-blue), rgba(37, 99, 235, 0));
+    opacity: 0.72;
+}
+
+.selection-count {
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.selection-count:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px rgba(37, 99, 235, 0.14);
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+    position: relative;
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background 0.18s ease,
+        transform 0.18s ease;
+}
+
+.form-field input:hover,
+.form-field textarea:hover,
+.form-field select:hover {
+    box-shadow: 0 5px 16px rgba(15, 23, 42, 0.035);
+}
+
+.form-field input:focus,
+.form-field textarea:focus,
+.form-field select:focus {
+    transform: translateY(-1px);
+    box-shadow:
+        0 0 0 3px rgba(37, 99, 235, 0.08),
+        0 10px 24px rgba(37, 99, 235, 0.08);
+    background: #fcfdff;
+}
+
+.form-field select {
+    cursor: pointer;
+}
+
+/* Architecture cards get the strongest visual treatment because they are a
+   core ServerBench interaction. */
+.architecture-grid {
+    perspective: 1200px;
+}
+
+.architecture-card {
+    position: relative;
+    overflow: hidden;
+    transform-origin: center bottom;
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.022);
+}
+
+.architecture-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(255,255,255,0), rgba(255,255,255,0.64), rgba(255,255,255,0));
+    transform: translateX(-120%);
+    transition: transform 0.6s ease;
+}
+
+.architecture-card::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #60a5fa, #2563eb);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 0.22s ease;
+}
+
+.architecture-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.architecture-card:hover::before {
+    transform: translateX(120%);
+}
+
+.architecture-card:hover::after,
+.architecture-card.selected::after {
+    transform: scaleY(1);
+}
+
+.architecture-card:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 14px 28px rgba(37, 99, 235, 0.09);
+    transform: translateY(-3px) rotateX(0.5deg);
+}
+
+.architecture-card.selected {
+    box-shadow:
+        0 0 0 1px rgba(37, 99, 235, 0.08),
+        0 12px 30px rgba(37, 99, 235, 0.10);
+}
+
+.architecture-check {
+    transition:
+        transform 0.2s cubic-bezier(.22,1,.36,1),
+        background 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+.architecture-card:hover .architecture-check {
+    transform: scale(1.05);
+}
+
+.architecture-check.checked {
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    animation: sb-check-pop 0.26s cubic-bezier(.22,1,.36,1) both;
+}
+
+.architecture-content strong {
+    transition: color 0.18s ease;
+}
+
+.architecture-card:hover .architecture-content strong,
+.architecture-card.selected .architecture-content strong {
+    color: #1d4ed8;
+}
+
+.thread-pool-field {
+    animation: sb-expand-in 0.28s ease both;
+}
+
+.form-actions {
+    animation: sb-content-in 0.55s 0.3s ease both;
+}
+
+.secondary-button,
+.primary-button {
+    position: relative;
+    overflow: hidden;
+}
+
+.secondary-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 7px 18px rgba(15, 23, 42, 0.05);
+}
+
+.primary-button {
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
+}
+
+.primary-button::before {
+    content: "";
+    position: absolute;
+    top: -30%;
+    left: -60%;
+    width: 42%;
+    height: 160%;
+    transform: rotate(18deg);
+    background: rgba(255, 255, 255, 0.18);
+    transition: left 0.55s ease;
+}
+
+.primary-button:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+    transform: translateY(-2px);
+}
+
+.primary-button:hover:not(:disabled)::before {
+    left: 125%;
+}
+
+.primary-button:disabled {
+    box-shadow: none;
+}
+
+.configuration-summary {
+    animation: sb-summary-in 0.58s 0.18s ease both;
+}
+
+.summary-card {
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--sb-shadow-sm);
+    transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease;
+}
+
+.summary-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #2563eb, #60a5fa, #818cf8);
+    opacity: 0.82;
+}
+
+.summary-card:hover {
+    border-color: #d9e3f0;
+    box-shadow: var(--sb-shadow-md);
+    transform: translateY(-2px);
+}
+
+.summary-header {
+    padding-top: 2px;
+}
+
+.summary-row {
+    border-radius: 6px;
+    transition: background 0.16s ease, padding 0.16s ease;
+}
+
+.summary-row:hover {
+    padding-left: 6px;
+    padding-right: 6px;
+    background: #f8fafc;
+}
+
+.selected-item {
+    padding: 5px 7px;
+    border-radius: 6px;
+    background: #f8fafc;
+    transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.selected-item:hover {
+    background: #eff6ff;
+    transform: translateX(2px);
+}
+
+.create-error,
+.success-message {
+    animation: sb-message-in 0.3s ease both;
+}
+
+.create-error {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
+    padding: 14px 15px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 10px;
+}
+
+.create-error span {
+    color: #b91c1c;
+}
+
+.success-message {
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(22, 101, 52, 0.08);
+}
+
+.success-message::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, rgba(255,255,255,0), rgba(255,255,255,0.56), rgba(255,255,255,0));
+    transform: translateX(-120%);
+    animation: sb-success-sweep 0.9s 0.1s ease both;
+}
+
+.success-message > * {
+    position: relative;
+    z-index: 1;
+}
+
+.success-open-button {
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 7px;
+    padding: 7px 10px;
+    border: 1px solid #bbf7d0;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #15803d;
+    font-size: 9px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.success-open-button:hover {
+    background: #f0fdf4;
+    transform: translateY(-1px);
+    box-shadow: 0 7px 18px rgba(22, 101, 52, 0.08);
+}
+
+@keyframes sb-page-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes sb-content-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes sb-section-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes sb-summary-in {
+    from {
+        opacity: 0;
+        transform: translateX(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes sb-expand-in {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes sb-check-pop {
+    0% { transform: scale(0.75); }
+    70% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+@keyframes sb-message-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.99);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes sb-success-sweep {
+    to { transform: translateX(120%); }
+}
+
+@keyframes sb-float-a {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(-24px, 18px, 0); }
+}
+
+@keyframes sb-float-b {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(20px, -14px, 0); }
+}
+
+@media (max-width: 1050px) {
+    .experiment-page::before,
+    .experiment-page::after {
+        opacity: 0.65;
+    }
+}
+
+@media (max-width: 720px) {
+    .experiment-header h1 {
+        font-size: 26px;
+    }
+
+    .form-section:hover,
+    .summary-card:hover {
+        transform: none;
+    }
+
+    .architecture-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .configuration-summary {
+        animation-delay: 0.12s;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
